@@ -31,14 +31,16 @@
       <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-xl">📅</div>
       <div>
         <h1 class="text-lg font-semibold leading-tight">Calendario de Arribos</h1>
-        <p class="text-xs text-slate-400">Timeline tipo Gantt · ETD → ETA por estado de la carga</p>
+        <p class="text-xs text-slate-400">Timeline tipo Gantt · ETD → ETA · <span id="modeBadge" class="text-sky-300">Cargando…</span></p>
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a href="control_oportunidades_crm.html" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">← Volver al CRM</a>
-      <label class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
+      <a href="control_oportunidades_crm.html" onclick="goTo(pageUrl('crm')); return false;" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">← Volver al CRM</a>
+      <label id="btnImport" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
         Importar Excel<input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelImport(this)">
       </label>
+      <div id="userAvatar" class="hidden"></div>
+      <button id="btnLogout" type="button" onclick="logoutNow()" class="hidden text-sm text-slate-300 hover:text-white px-2 py-1.5">Salir</button>
     </div>
   </div>
 </header>
@@ -219,8 +221,8 @@ function rowsFromSheet(json) {
         case 'sem': { const s = normKey(v); val = s.startsWith('roj') ? 'rojo' : s.startsWith('amb') || s.startsWith('ama') ? 'ambar' : 'verde'; break; }
         case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
         case 'seguroEstado': { const s = normKey(v); val = s.includes('nocontratado') || s === 'no' ? 'NO_CONTRATADO' : s.includes('contratado') ? 'CONTRATADO' : ''; break; }
-        case 'alertas': val = String(v || '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
-        default: val = String(v ?? '').trim();
+        case 'alertas': val = String(v || '').replace(/[<>]/g, '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
+        default: val = String(v ?? '').replace(/[<>]/g, '').trim();
       }
       if (key.startsWith('hito:')) { if (val) r.hitos[key.slice(5)] = val; }
       else r[key] = val;
@@ -262,7 +264,151 @@ function downloadExcel(data, filename) {
   XLSX.writeFile(wb, filename);
 }
 
-let DATA = loadData();
+// ============ CONEXIÓN CON GOOGLE SHEETS (Apps Script) + LOGIN ============
+// Dentro de Apps Script existe google.script.run: los datos vienen de la hoja y se exige usuario/contraseña.
+// Abierto como archivo local: "modo local" con datos de ejemplo/importados guardados en este navegador.
+const IS_GAS = typeof google !== 'undefined' && !!(google.script && google.script.run);
+const TOKEN_KEY = 'crm_session_token';
+let SESSION = null;
+let APP = { appUrl: '', sheetUrl: '', config: {} };
+let loginWaiters = [];
+
+function gasCall(fn, ...args) {
+  return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+}
+let MEM_TOKEN = null; // respaldo si el navegador bloquea localStorage
+function getToken() { try { return localStorage.getItem(TOKEN_KEY) || MEM_TOKEN; } catch (e) { return MEM_TOKEN; } }
+function setToken(t) { MEM_TOKEN = t; try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+function clearToken() { MEM_TOKEN = null; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+function errMsg(e) { return String((e && e.message) || e).replace(/^Error:\s*/, ''); }
+
+async function api(fn, ...args) {
+  try {
+    return await gasCall(fn, getToken(), ...args);
+  } catch (e) {
+    if (errMsg(e).includes('SESION_EXPIRADA')) {
+      clearToken();
+      await showLogin('Tu sesión expiró. Ingresa nuevamente.');
+      return api(fn, ...args);
+    }
+    throw e;
+  }
+}
+
+function showLogin(msg) {
+  let ov = document.getElementById('loginOverlay');
+  if (!ov) {
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="loginOverlay" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
+      <form id="loginForm" class="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-sky-500 flex items-center justify-center text-xl">🚢</div>
+          <div><h1 class="text-lg font-semibold text-slate-800 leading-tight">Control de Oportunidades</h1>
+          <p class="text-xs text-slate-500">CRM · Agente de Carga Internacional</p></div>
+        </div>
+        <p id="loginMsg" class="text-sm text-slate-600">Ingresa con tu usuario y contraseña.</p>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Usuario</label>
+          <input id="loginUser" autocomplete="username" autocapitalize="none" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Contraseña</label>
+          <div class="relative"><input id="loginPass" type="password" autocomplete="current-password" required class="w-full border border-slate-200 rounded-lg px-3 py-2 pr-16 text-sm focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500">
+          <button type="button" onclick="const i=document.getElementById('loginPass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Ver':'Ocultar'" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-800">Ver</button></div></div>
+        <p id="loginError" class="hidden text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2"></p>
+        <button id="loginBtn" type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-2 text-sm font-medium">Ingresar</button>
+        <p class="text-[11px] text-slate-400 text-center">Acceso restringido. Si no tienes usuario, pídelo al administrador.</p>
+      </form>
+    </div>`);
+    ov = document.getElementById('loginOverlay');
+    document.getElementById('loginForm').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const btn = document.getElementById('loginBtn'), er = document.getElementById('loginError');
+      btn.disabled = true; btn.textContent = 'Verificando…'; er.classList.add('hidden');
+      try {
+        const s = await gasCall('login', document.getElementById('loginUser').value, document.getElementById('loginPass').value);
+        setToken(s.token);
+        SESSION = s;
+        document.getElementById('loginPass').value = '';
+        ov.classList.add('hidden');
+        const w = loginWaiters; loginWaiters = []; w.forEach(f => f(s));
+      } catch (e) {
+        er.textContent = errMsg(e); er.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Ingresar';
+      }
+    });
+  }
+  if (msg) document.getElementById('loginMsg').textContent = msg;
+  ov.classList.remove('hidden');
+  setTimeout(() => document.getElementById('loginUser').focus(), 50);
+  return new Promise(res => loginWaiters.push(res));
+}
+
+async function loadAllData() {
+  if (!IS_GAS) return loadData();
+  if (!getToken()) await showLogin();
+  const res = await api('getData');
+  SESSION = res.user;
+  APP = { appUrl: res.appUrl, sheetUrl: res.sheetUrl, config: res.config || {} };
+  return rowsFromSheet(res.rows);
+}
+
+async function logoutNow() {
+  if (!IS_GAS) return;
+  try { await gasCall('logout', getToken()); } catch (e) {}
+  clearToken();
+  SESSION = null;
+  await showLogin('Sesión cerrada. Ingresa nuevamente.');
+  if (APP.appUrl) goTo(APP.appUrl); else location.reload();
+}
+
+function pageUrl(page, ro) {
+  if (IS_GAS) return APP.appUrl + '?page=' + page + (ro ? '&ro=' + encodeURIComponent(ro) : '');
+  return (page === 'gantt' ? 'gantt_arribos.html' : 'control_oportunidades_crm.html') + (ro ? '#ro=' + encodeURIComponent(ro) : '');
+}
+function goTo(url) { if (IS_GAS) window.open(url, '_top'); else location.href = url; }
+
+function getRequestedRO() {
+  return new Promise(res => {
+    if (IS_GAS && google.script.url) google.script.url.getLocation(l => res((l.parameter || {}).ro || ''));
+    else res(decodeURIComponent((location.hash.match(/^#ro=(.+)$/) || [])[1] || ''));
+  });
+}
+
+// Guarda en la hoja solo las columnas indicadas (o la fila completa)
+function rowPatch(r, keys) {
+  const full = rowsToSheet([r])[0], o = {};
+  EXCEL_COLUMNS.forEach(([k, h]) => { if (keys.includes(k) || (keys.includes('hitos') && k.startsWith('hito:'))) o[h] = full[h]; });
+  return o;
+}
+async function persist(r, keys) {
+  if (!IS_GAS) { saveData(); return; }
+  await api('updateRO', r.ro, keys ? rowPatch(r, keys) : rowsToSheet([r])[0]);
+}
+
+function toIsoDate(dmy) {
+  const d = parseDate(dmy);
+  return d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : '';
+}
+
+// Cabecera común: modo, usuario y botón Salir
+function applySessionUI() {
+  const badge = document.getElementById('modeBadge');
+  const av = document.getElementById('userAvatar');
+  const out = document.getElementById('btnLogout');
+  const imp = document.getElementById('btnImport');
+  const sheet = document.getElementById('lnkSheet');
+  if (IS_GAS && SESSION) {
+    if (badge) badge.textContent = `Google Sheets · ${SESSION.nombre} (${SESSION.rol})`;
+    if (av) { av.textContent = SESSION.nombre.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase(); av.title = SESSION.nombre; }
+    if (out) out.classList.remove('hidden');
+    if (imp) imp.classList.add('hidden');
+    if (sheet && APP.sheetUrl) { sheet.href = APP.sheetUrl; sheet.classList.remove('hidden'); }
+    document.querySelectorAll('[data-editor]').forEach(el => el.classList.toggle('hidden', SESSION.rol === 'lector'));
+  } else if (badge) {
+    badge.textContent = 'Modo local · datos guardados en este navegador';
+  }
+}
+
+let DATA = [];
 
 const DAY = 864e5;
 let LEFT_W = 260;
@@ -384,7 +530,7 @@ function render() {
     }
     const etdMark = i.etd ? `<div class="absolute text-[10px] text-slate-700 z-[2]" style="left:${x(i.etd) + dayW / 2 - 5}px;bottom:2px" title="ETD ${r.etd}">▲</div>` : '';
     const etaMark = i.eta ? `<div class="absolute text-sm z-[2]" style="left:${x(i.eta) + dayW / 2 - 2}px;top:2px" title="ETA ${r.eta}">🏁</div>` : '';
-    return `<div class="g-row flex" onclick="location.href='control_oportunidades_crm.html#ro=${encodeURIComponent(r.ro)}'">
+    return `<div class="g-row flex" data-ro="${r.ro}" onclick="goTo(pageUrl('crm', this.dataset.ro))">
       <div class="g-left shrink-0 px-3 py-2 border-b border-slate-100 ${st.row}" style="width:${LEFT_W}px">
         <div class="flex items-center justify-between gap-2">
           <span class="font-semibold text-slate-800 text-sm">RO ${r.ro}</span>
@@ -443,15 +589,25 @@ async function handleExcelImport(input) {
 }
 
 // Si el CRM cambia los datos en otra pestaña, se actualiza el calendario
-window.addEventListener('storage', e => { if (e.key === STORAGE_KEY) { DATA = loadData(); render(); } });
+window.addEventListener('storage', e => { if (!IS_GAS && e.key === STORAGE_KEY) { DATA = loadData(); render(); } });
 ['fCorte', 'fVentana', 'fHito', 'fEstado', 'fZoom'].forEach(id => document.getElementById(id).addEventListener('input', render));
 window.addEventListener('resize', () => { const w = window.innerWidth < 640 ? 170 : 260; if (w !== LEFT_W) render(); });
 
 renderLegend();
-setDefaultCorte();
-render();
-// Desplazar el Gantt hasta la fecha de corte
-(() => { const g = document.getElementById('gantt'); const line = g.querySelector('.bg-red-500'); if (line) g.scrollLeft = Math.max(0, LEFT_W + line.offsetLeft - g.clientWidth / 2); })();
+(async () => {
+  try {
+    DATA = await loadAllData();
+  } catch (e) {
+    DATA = [];
+    showImportFeedback('No se pudieron cargar los datos: ' + errMsg(e), false);
+  }
+  applySessionUI();
+  setDefaultCorte();
+  render();
+  // Desplazar el Gantt hasta la fecha de corte
+  const g = document.getElementById('gantt'); const line = g.querySelector('.bg-red-500');
+  if (line) g.scrollLeft = Math.max(0, LEFT_W + line.offsetLeft - g.clientWidth / 2);
+})();
 </script>
 </body>
 </html>
