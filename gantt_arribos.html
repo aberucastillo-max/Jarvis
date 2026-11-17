@@ -101,12 +101,6 @@
     </div>
   </section>
 
-  <!-- PRÓXIMOS ARRIBOS -->
-  <section class="bg-white rounded-xl card p-4">
-    <h3 class="text-sm font-semibold text-slate-800 mb-3">🔔 Cargas por arribar (ordenadas por ETA)</h3>
-    <div id="proximos" class="flex gap-3 overflow-x-auto pb-1"></div>
-  </section>
-
   <!-- GANTT -->
   <section class="bg-white rounded-xl card overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
@@ -344,24 +338,6 @@ function render() {
   document.getElementById('kTransito').textContent = rows.filter(x => x.i.hito === 'In transit').length;
   document.getElementById('kVencidas').textContent = rows.filter(x => x.i.tag === 'vencida').length;
   document.getElementById('kEntregadas').textContent = rows.filter(x => x.i.hito === 'Delivered').length;
-
-  // Tarjetas de próximos arribos
-  const pend = rows.filter(x => !['entregada', 'arribada'].includes(x.i.tag));
-  document.getElementById('proximos').innerHTML = pend.map(({ r, i }) => {
-    const st = TAG_STYLE[i.tag];
-    return `<a href="control_oportunidades_crm.html#ro=${encodeURIComponent(r.ro)}" class="shrink-0 w-56 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 ${st.row}">
-      <div class="flex justify-between items-start gap-2">
-        <span class="font-semibold text-slate-800">RO ${r.ro}</span>
-        <span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${st.badge}">${st.label(i)}</span>
-      </div>
-      <div class="text-xs text-slate-500 truncate">${r.consignatario}</div>
-      <div class="text-xs text-slate-500">${r.ruta} · ${r.naviera}</div>
-      <div class="mt-2 flex items-center justify-between text-xs">
-        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${MILESTONE_COLORS[i.hito]}"></span>${i.hito}</span>
-        <span class="text-slate-600">ETA ${r.eta || '—'}</span>
-      </div>
-    </a>`;
-  }).join('') || '<p class="text-xs text-slate-400">No hay cargas pendientes de arribo.</p>';
 
   // Rango de fechas del Gantt
   const dates = [corte];
