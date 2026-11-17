@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Control de Oportunidades — CRM Agente de Carga</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  .card { box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
+  .row-hover:hover { background: #f8fafc; cursor: pointer; }
+  .bar { transition: width .6s ease; }
+  .fade-in { animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+  .modal-open { overflow: hidden; }
+  select, input { outline: none; }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+<!-- HEADER -->
+<header class="bg-slate-900 text-white">
+  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-xl">🚢</div>
+      <div>
+        <h1 class="text-lg font-semibold leading-tight">Control de Oportunidades</h1>
+        <p class="text-xs text-slate-400">CRM · Agente de Carga Internacional</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="exportCSV()" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Exportar CSV</button>
+      <div class="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-sm font-semibold">ML</div>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:grid lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-6 lg:items-start">
+
+<!-- PANEL VERTICAL IZQUIERDO: ALERTAS -->
+<aside class="mb-6 lg:mb-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto space-y-4">
+  <div class="bg-white rounded-xl card p-4">
+    <h3 class="text-sm font-semibold text-slate-800">Panel de alertas operativas</h3>
+    <p class="text-xs text-slate-500 mt-1">Seguimiento de alertas ETA y operaciones RO sin seguro registrado.</p>
+  </div>
+
+  <!-- ALERTAS ETA -->
+  <section class="bg-white rounded-xl card p-4">
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <h4 class="text-sm font-semibold text-slate-700">⏱️ Alertas ETA y seguimiento</h4>
+      <span id="etaAlertCount" class="text-xs rounded-full bg-red-50 text-red-700 px-2.5 py-1 whitespace-nowrap">0 alertas</span>
+    </div>
+    <ul id="etaAlertsList" class="text-sm space-y-2 max-h-72 overflow-y-auto">
+      <li class="text-xs text-slate-400">Sin alertas ETA activas.</li>
+    </ul>
+  </section>
+
+  <!-- SEGURO NO CONTRATADO -->
+  <section class="bg-white rounded-xl card p-4">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <h4 class="text-sm font-semibold text-slate-700">🛡️ RO sin seguro contratado</h4>
+      <span id="uninsuredCount" class="text-xs rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 whitespace-nowrap">0 pendientes</span>
+    </div>
+    <p class="text-xs text-slate-500 mb-3">Registra la prima en USD o confirma expresamente que el cliente no contrató seguro.</p>
+    <ul id="listUninsured" class="space-y-2"></ul>
+
+    <div id="insuranceCalculator" class="hidden mt-4 border border-sky-100 bg-sky-50/60 rounded-lg p-3">
+      <div class="flex items-start justify-between gap-2 mb-3">
+        <div>
+          <h4 class="text-sm font-semibold text-slate-700">Calculadora rápida de prima</h4>
+          <p id="calcROLabel" class="text-xs text-slate-500">Selecciona una operación</p>
+        </div>
+        <button type="button" onclick="closeInsuranceCalculator()" class="text-xs text-slate-500 hover:text-slate-800">Cerrar</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Valor asegurado (USD)</label>
+          <input id="insuredValue" type="number" min="0" step="0.01" placeholder="Ej. 25000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Tasa (%)</label>
+          <input id="insuranceRate" type="number" min="0" step="0.001" placeholder="Ej. 0.30" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" value="0.30">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs text-slate-500 mb-1">Prima estimada (USD)</label>
+          <input id="premiumResult" type="text" readonly class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-100 font-semibold" value="$0.00">
+        </div>
+        <button type="button" onclick="saveCalculatedInsurance()" class="col-span-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-2 text-sm font-medium">Agregar monto USD</button>
+      </div>
+      <div class="mt-3 border-t border-sky-100 pt-3 space-y-2">
+        <p class="text-xs text-slate-500">Si el cliente rechazó el seguro, registra expresamente esa confirmación.</p>
+        <button type="button" onclick="confirmNoInsurance()" class="w-full border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg px-3 py-2 text-sm font-medium">Confirmar: no tiene seguro contratado</button>
+      </div>
+      <p id="insuranceFeedback" class="text-xs mt-2 text-slate-600" aria-live="polite"></p>
+    </div>
+  </section>
+</aside>
+
+<main class="min-w-0">
+
+  <!-- FILTROS -->
+  <section class="bg-white rounded-xl card p-4 mb-6">
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Buscar (RO / Ref)</label>
+        <input id="fSearch" type="text" placeholder="Ej. 2024-03 o IMP-2024-089"
+               class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500" />
+      </div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Ruta</label>
+        <select id="fRuta" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[130px]"><option value="">Todas</option></select></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Naviera</label>
+        <select id="fNaviera" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[120px]"><option value="">Todas</option></select></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Broker</label>
+        <select id="fBroker" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[130px]"><option value="">Todos</option></select></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Servicio</label>
+        <select id="fServicio" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[110px]"><option value="">Todos</option></select></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Estado</label>
+        <select id="fEstado" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[110px]">
+          <option value="">Todos</option><option>ABIERTA</option><option>GANADA</option><option>PERDIDA</option><option>CERRADA</option>
+        </select></div>
+      <button onclick="resetFilters()" class="text-sm text-slate-500 hover:text-slate-800 px-3 py-2">Limpiar</button>
+    </div>
+  </section>
+
+  <!-- KPIs -->
+  <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+    <div class="bg-white rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Pendiente total</p>
+      <p id="kpiPendiente" class="text-2xl font-semibold mt-1">$0</p>
+      <p class="text-xs text-emerald-600 mt-1">▲ 12% vs. mes anterior</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">% Asegurado</p>
+      <p id="kpiAsegurado" class="text-2xl font-semibold mt-1">0%</p>
+      <p class="text-xs text-emerald-600 mt-1">▲ 5 pts</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Cotiz. vencidas</p>
+      <p id="kpiVencidas" class="text-2xl font-semibold mt-1">0</p>
+      <p class="text-xs text-red-600 mt-1">▼ 3</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Comisión</p>
+      <p id="kpiComision" class="text-2xl font-semibold mt-1">$0</p>
+      <p class="text-xs text-emerald-600 mt-1">▲ 8%</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Oport. abiertas</p>
+      <p id="kpiAbiertas" class="text-2xl font-semibold mt-1">0</p>
+      <p class="text-xs text-slate-500 mt-1">en pipeline</p>
+    </div>
+  </section>
+
+  <!-- SEMÁFORO GLOBAL -->
+  <section class="bg-white rounded-xl card px-4 py-3 mb-6 flex flex-wrap items-center gap-4 text-sm">
+    <span class="font-medium text-slate-600">Semáforo global:</span>
+    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span id="cntVerde">0</span> ok</span>
+    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><span id="cntAmbar">0</span> atención</span>
+    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><span id="cntRojo">0</span> críticas</span>
+  </section>
+
+  <!-- TABLA -->
+  <section class="bg-white rounded-xl card overflow-hidden mb-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="text-left px-4 py-3 font-medium">RO</th>
+            <th class="text-left px-4 py-3 font-medium">Consignatario</th>
+            <th class="text-left px-4 py-3 font-medium">Ruta</th>
+            <th class="text-left px-4 py-3 font-medium">Servicio</th>
+            <th class="text-left px-4 py-3 font-medium">Naviera</th>
+            <th class="text-left px-4 py-3 font-medium">ETD</th>
+            <th class="text-left px-4 py-3 font-medium">ETA</th>
+            <th class="text-center px-4 py-3 font-medium">Prioridad</th>
+            <th class="text-center px-4 py-3 font-medium">🚦</th>
+            <th class="text-right px-4 py-3 font-medium">Pendiente</th>
+          </tr>
+        </thead>
+        <tbody id="tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+    <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <span id="footerCount">Mostrando 0 oportunidades</span>
+      <span>Click en una fila para ver el detalle</span>
+    </div>
+  </section>
+
+  <!-- ANÁLISIS -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="bg-white rounded-xl card p-4">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">Top rutas por pendiente</h3>
+      <div id="chartRutas" class="space-y-2"></div>
+    </div>
+    <div class="bg-white rounded-xl card p-4">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">Comisión por broker</h3>
+      <div id="chartBrokers" class="space-y-2"></div>
+    </div>
+    <div class="bg-white rounded-xl card p-4">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">Cumplimiento ETD/ETA</h3>
+      <div class="flex h-4 rounded-full overflow-hidden mb-3">
+        <div class="bg-emerald-500" style="width:68%"></div>
+        <div class="bg-amber-500" style="width:22%"></div>
+        <div class="bg-red-500" style="width:10%"></div>
+      </div>
+      <ul class="text-xs space-y-1.5 text-slate-600">
+        <li class="flex justify-between"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>On-time</span><span class="font-medium">68%</span></li>
+        <li class="flex justify-between"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>+1 a +3 días</span><span class="font-medium">22%</span></li>
+        <li class="flex justify-between"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-500"></span>+3 días</span><span class="font-medium">10%</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <p class="text-xs text-slate-400 mt-6 text-center">⚠️ La columna <b>PENDIENTE</b> permanece visible hasta confirmar si es la que deseas eliminar.</p>
+</main>
+</div>
+
+<!-- MODAL DETALLE -->
+<div id="modal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="closeModal()"></div>
+  <div class="relative max-w-3xl mx-auto my-8 bg-white rounded-xl shadow-xl fade-in max-h-[90vh] overflow-y-auto">
+    <div class="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-xl">
+      <div>
+        <h2 id="mTitle" class="text-lg font-semibold">—</h2>
+        <p id="mSub" class="text-xs text-slate-500">—</p>
+      </div>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Comercial</h4>
+        <dl id="mComercial" class="text-sm space-y-1.5"></dl>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-4 mb-2">Financiero</h4>
+        <dl id="mFinanciero" class="text-sm space-y-1.5"></dl>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Operativo</h4>
+        <dl id="mOperativo" class="text-sm space-y-1.5"></dl>
+      </div>
+      <div class="md:col-span-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">⏱️ Timeline</h4>
+        <ul id="mTimeline" class="text-sm space-y-1.5"></ul>
+      </div>
+      <div class="md:col-span-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">🔔 Alertas activas</h4>
+        <ul id="mAlertas" class="text-sm space-y-1.5"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ DATOS DE EJEMPLO ============
+const DATA = [
+  { ro:'2024-01', consignatario:'ACME SAC', ruta:'LIM→SHA', servicio:'FCL', naviera:'Maersk', etd:'18/11/2024', eta:'12/12/2024', sem:'verde', prioridad: false, pendiente:4200,
+    broker:'ABC Brokers', comision:850, seguro:210, cierre:'10/11/2024', validez:'30/11/2024', agente:'—', ref:'ACME-2024-101', estado:'ABIERTA',
+    timeline:[['Booking confirmado','10/11',true],['Gate-in','13/11',true],['Loaded','18/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:[] },
+  { ro:'2024-02', consignatario:'Global Trade Perú', ruta:'LIM→RTM', servicio:'LCL', naviera:'MSC', etd:'20/11/2024', eta:'20/12/2024', sem:'ambar', prioridad: true, pendiente:1850,
+    broker:'XYZ Corp', comision:320, seguro:95, cierre:'12/11/2024', validez:'22/11/2024', agente:'Rotterdam Agent', ref:'GTP-2024-088', estado:'ABIERTA',
+    timeline:[['Booking confirmado','11/11',true],['Gate-in','16/11',true],['Loaded','20/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:['VALIDEZ vence en 3 días'] },
+  { ro:'2024-03', consignatario:'Import del Sur', ruta:'LIM→HAM', servicio:'FCL', naviera:'CMA CGM', etd:'15/11/2024', eta:'08/12/2024', sem:'rojo', prioridad: true, pendiente:6300,
+    broker:'ABC Brokers', comision:850, seguro:420, cierre:'10/11/2024', validez:'25/11/2024', agente:'Hansa Agent GmbH', ref:'IMP-2024-089', estado:'ABIERTA',
+    timeline:[['Booking confirmado','10/11',true],['Gate-in','13/11',true],['Loaded','15/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:['VALIDEZ vencida hace 2 días','PENDIENTE > 60 días — escalar a cobranza','ETA desviada +2 días'] },
+  { ro:'2024-04', consignatario:'Comercial Andina', ruta:'LIM→MIA', servicio:'Aéreo', naviera:'LATAM', etd:'19/11/2024', eta:'21/11/2024', sem:'verde', prioridad: false, pendiente:980,
+    broker:'Global Log', comision:140, seguro:45, cierre:'14/11/2024', validez:'28/11/2024', agente:'—', ref:'AND-2024-014', estado:'ABIERTA',
+    timeline:[['Booking confirmado','14/11',true],['Gate-in','18/11',true],['Loaded','19/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:[] },
+  { ro:'2024-05', consignatario:'Distribuidora XYZ', ruta:'LIM→BUE', servicio:'FCL', naviera:'Hapag', etd:'21/11/2024', eta:'15/12/2024', sem:'ambar', prioridad: true, pendiente:3450,
+    broker:'XYZ Corp', comision:410, seguro:180, cierre:'15/11/2024', validez:'24/11/2024', agente:'—', ref:'DXYZ-2024-032', estado:'ABIERTA',
+    timeline:[['Booking confirmado','15/11',true],['Gate-in','19/11',true],['Loaded','21/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:['VALIDEZ vence en 1 día'] },
+  { ro:'2024-06', consignatario:'Textiles Unidos', ruta:'LIM→VLC', servicio:'LCL', naviera:'ONE', etd:'14/11/2024', eta:'10/12/2024', sem:'rojo', prioridad: true, pendiente:2100,
+    broker:'Global Log', comision:260, seguro:0, cierre:'08/11/2024', validez:'20/11/2024', agente:'Valencia Agent', ref:'TXT-2024-076', estado:'ABIERTA',
+    timeline:[['Booking confirmado','08/11',true],['Gate-in','11/11',true],['Loaded','14/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:['Sin seguro registrado','PENDIENTE > 60 días','ETA desviada +3 días'] },
+  { ro:'2024-07', consignatario:'Agroexport S.A.', ruta:'LIM→QING', servicio:'FCL', naviera:'Maersk', etd:'22/11/2024', eta:'28/12/2024', sem:'verde', prioridad: false, pendiente:5600,
+    broker:'ABC Brokers', comision:920, seguro:280, cierre:'16/11/2024', validez:'02/12/2024', agente:'Qingdao Partner', ref:'AGRO-2024-045', estado:'ABIERTA',
+    timeline:[['Booking confirmado','16/11',true],['Gate-in','20/11',true],['Loaded','22/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:[] },
+  { ro:'2024-08', consignatario:'Minera del Norte', ruta:'LIM→BUS', servicio:'FCL', naviera:'MSC', etd:'17/11/2024', eta:'14/12/2024', sem:'ambar', prioridad: true, pendiente:8200,
+    broker:'XYZ Corp', comision:1100, seguro:390, cierre:'11/11/2024', validez:'23/11/2024', agente:'—', ref:'MIN-2024-051', estado:'ABIERTA',
+    timeline:[['Booking confirmado','11/11',true],['Gate-in','14/11',true],['Loaded','17/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
+    alertas:['PENDIENTE 30–60 días'] },
+];
+
+// ============ HELPERS ============
+const fmt$ = n => '$' + n.toLocaleString('en-US');
+const semClasses = { verde:'bg-emerald-500', ambar:'bg-amber-500', rojo:'bg-red-500' };
+const semText    = { verde:'text-emerald-600', ambar:'text-amber-600', rojo:'text-red-600' };
+const semBadge   = { verde:'bg-emerald-50 text-emerald-700', ambar:'bg-amber-50 text-amber-700', rojo:'bg-red-50 text-red-700' };
+
+// ============ RENDER TABLA ============
+function renderTable(rows) {
+  const tb = document.getElementById('tbody');
+  tb.innerHTML = rows.map(r => `
+    <tr class="row-hover" onclick="openModal('${r.ro}')">
+      <td class="px-4 py-3 font-medium text-slate-700">${r.ro}</td>
+      <td class="px-4 py-3">${r.consignatario}</td>
+      <td class="px-4 py-3 text-slate-600">${r.ruta}</td>
+      <td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">${r.servicio}</span></td>
+      <td class="px-4 py-3 text-slate-600">${r.naviera}</td>
+      <td class="px-4 py-3 text-slate-600">${r.etd}</td>
+      <td class="px-4 py-3 text-slate-600">${r.eta}</td>
+      <td class="px-4 py-3 text-center">
+        <label class="inline-flex items-center gap-1.5 cursor-pointer" onclick="event.stopPropagation()">
+          <input type="checkbox" ${r.prioridad ? 'checked' : ''} onchange="togglePriority('${r.ro}', this.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+          <span class="text-xs ${r.prioridad ? 'font-semibold text-red-600' : 'text-slate-400'}">${r.prioridad ? 'Alta' : 'Normal'}</span>
+        </label>
+      </td>
+      <td class="px-4 py-3 text-center"><span class="inline-block w-3 h-3 rounded-full ${semClasses[r.sem]}"></span></td>
+      <td class="px-4 py-3 text-right font-medium text-slate-700">${fmt$(r.pendiente)}</td>
+    </tr>`).join('');
+  document.getElementById('footerCount').textContent = `Mostrando ${rows.length} oportunidad(es)`;
+  renderSemaforo(rows);
+  updateKPIs(rows);
+}
+
+// ============ SEMÁFORO GLOBAL ============
+function renderSemaforo(rows) {
+  const c = { verde:0, ambar:0, rojo:0 };
+  rows.forEach(r => c[r.sem]++);
+  document.getElementById('cntVerde').textContent = c.verde;
+  document.getElementById('cntAmbar').textContent = c.ambar;
+  document.getElementById('cntRojo').textContent = c.rojo;
+}
+
+// ============ KPIs ============
+function updateKPIs(rows) {
+  const pend = rows.reduce((s,r)=>s+r.pendiente,0);
+  const com  = rows.reduce((s,r)=>s+r.comision,0);
+  const aseg = rows.filter(r=>r.seguro>0).length;
+  const venc = rows.filter(r=>r.sem==='rojo').length;
+  const abiertas = rows.filter(r=>r.estado==='ABIERTA').length;
+  document.getElementById('kpiPendiente').textContent = fmt$(pend);
+  document.getElementById('kpiAsegurado').textContent = rows.length ? Math.round(aseg/rows.length*100)+'%' : '0%';
+  document.getElementById('kpiVencidas').textContent = venc;
+  document.getElementById('kpiComision').textContent = fmt$(com);
+  document.getElementById('kpiAbiertas').textContent = abiertas;
+}
+
+// ============ FILTROS ============
+function fillSelects() {
+  const uniq = k => [...new Set(DATA.map(d=>d[k]))].sort();
+  const add = (id, arr) => { const s=document.getElementById(id); arr.forEach(v=>s.insertAdjacentHTML('beforeend',`<option>${v}</option>`)); };
+  add('fRuta', uniq('ruta')); add('fNaviera', uniq('naviera')); add('fBroker', uniq('broker')); add('fServicio', uniq('servicio'));
+}
+
+function applyFilters() {
+  const q = document.getElementById('fSearch').value.trim().toLowerCase();
+  const ruta = document.getElementById('fRuta').value;
+  const nav  = document.getElementById('fNaviera').value;
+  const bro  = document.getElementById('fBroker').value;
+  const serv = document.getElementById('fServicio').value;
+  const est  = document.getElementById('fEstado').value;
+
+  const rows = DATA.filter(r =>
+    (!q || r.ro.toLowerCase().includes(q) || (r.ref||'').toLowerCase().includes(q)) &&
+    (!ruta || r.ruta===ruta) && (!nav || r.naviera===nav) &&
+    (!bro || r.broker===bro) && (!serv || r.servicio===serv) && (!est || r.estado===est)
+  );
+  renderTable(rows);
+  renderCharts(rows);
+  renderEtaAlerts(rows);
+  renderUninsured(rows);
+}
+
+function resetFilters() {
+  ['fSearch','fRuta','fNaviera','fBroker','fServicio','fEstado'].forEach(id=>document.getElementById(id).value='');
+  applyFilters();
+}
+
+// ============ MODAL ============
+function openModal(ro) {
+  const r = DATA.find(d=>d.ro===ro); if(!r) return;
+  document.getElementById('mTitle').textContent = `RO ${r.ro} — ${r.consignatario}`;
+  document.getElementById('mSub').textContent = `${r.ruta} · ${r.servicio} · ${r.naviera}`;
+
+  document.getElementById('mComercial').innerHTML = dl([
+    ['Broker', r.broker], ['Comisión', fmt$(r.comision)],
+    ['Cierre', r.cierre], ['Validez', r.validez], ['Estado', r.estado]
+  ]);
+  document.getElementById('mFinanciero').innerHTML = dl([
+    ['Pendiente', fmt$(r.pendiente)], ['Seguro (prima)', r.seguro? fmt$(r.seguro):'—']
+  ]);
+  document.getElementById('mOperativo').innerHTML = dl([
+    ['Servicio', r.servicio], ['Ruta', r.ruta], ['Naviera', r.naviera],
+    ['ETD', r.etd], ['ETA', r.eta], ['Agente/Coload', r.agente], ['Ref cliente', r.ref]
+  ]);
+
+  document.getElementById('mTimeline').innerHTML = r.timeline.map(([label,date,done])=>`
+    <li class="flex items-center gap-2 ${done?'text-slate-700':'text-slate-400'}">
+      <span class="w-4 text-center">${done?'✔':'○'}</span>
+      <span class="flex-1">${label}</span>
+      <span class="text-xs">${date||''}</span>
+    </li>`).join('');
+
+  document.getElementById('mAlertas').innerHTML = r.alertas.length
+    ? r.alertas.map(a=>`<li class="text-red-600">• ${a}</li>`).join('')
+    : `<li class="text-emerald-600">Sin alertas — todo en orden ✔</li>`;
+
+  document.getElementById('modal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+function dl(items){ return items.map(([k,v])=>`<div class="flex justify-between gap-2"><dt class="text-slate-500">${k}</dt><dd class="font-medium text-slate-700 text-right">${v}</dd></div>`).join(''); }
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
+
+// ============ CHARTS (CSS) ============
+function renderCharts(rows) {
+  // Top rutas por pendiente
+  const byRuta = {};
+  rows.forEach(r => byRuta[r.ruta] = (byRuta[r.ruta]||0) + r.pendiente);
+  const rutas = Object.entries(byRuta).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxR = Math.max(1, ...rutas.map(x=>x[1]));
+  document.getElementById('chartRutas').innerHTML = rutas.map(([k,v])=>`
+    <div>
+      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${k}</span><span class="font-medium">${fmt$(v)}</span></div>
+      <div class="h-2 bg-slate-100 rounded"><div class="bar h-2 bg-sky-500 rounded" style="width:${(v/maxR*100).toFixed(0)}%"></div></div>
+    </div>`).join('') || '<p class="text-xs text-slate-400">Sin datos</p>';
+
+  // Comisión por broker
+  const byBro = {};
+  rows.forEach(r => byBro[r.broker] = (byBro[r.broker]||0) + r.comision);
+  const bros = Object.entries(byBro).sort((a,b)=>b[1]-a[1]);
+  const maxB = Math.max(1, ...bros.map(x=>x[1]));
+  document.getElementById('chartBrokers').innerHTML = bros.map(([k,v])=>`
+    <div>
+      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${k}</span><span class="font-medium">${fmt$(v)}</span></div>
+      <div class="h-2 bg-slate-100 rounded"><div class="bar h-2 bg-indigo-500 rounded" style="width:${(v/maxB*100).toFixed(0)}%"></div></div>
+    </div>`).join('') || '<p class="text-xs text-slate-400">Sin datos</p>';
+}
+
+// ============ PRIORIDAD Y CONTROL DE SEGUROS ============
+let selectedInsuranceRO = null;
+
+function togglePriority(ro, checked) {
+  const r = DATA.find(x => x.ro === ro);
+  if (!r) return;
+  r.prioridad = checked;
+  applyFilters();
+}
+
+function renderEtaAlerts(rows = DATA) {
+  const alerts = [];
+  rows.forEach(r => {
+    (r.alertas || []).filter(a => /eta/i.test(a)).forEach(a => alerts.push({ro:r.ro, cliente:r.consignatario, ruta:r.ruta, texto:a}));
+  });
+  const count = document.getElementById('etaAlertCount');
+  const list = document.getElementById('etaAlertsList');
+  if (count) count.textContent = `${alerts.length} alertas`;
+  if (list) list.innerHTML = alerts.map(a => `
+    <li class="rounded-md bg-red-50/70 border border-red-100 px-3 py-2">
+      <div class="flex flex-wrap justify-between gap-1">
+        <span class="font-semibold text-slate-700">RO ${a.ro}</span>
+        <span class="text-xs text-slate-500">${a.ruta}</span>
+      </div>
+      <div class="text-xs text-slate-500">${a.cliente}</div>
+      <div class="text-xs text-red-700 mt-1">• ${a.texto}</div>
+    </li>`).join('') || `<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3">No hay alertas ETA activas.</li>`;
+}
+
+function renderUninsured(rows = DATA) {
+  const uninsured = rows.filter(r => !(Number(r.seguro) > 0) && r.seguroEstado !== 'NO_CONTRATADO');
+  const confirmed = rows.filter(r => r.seguroEstado === 'NO_CONTRATADO');
+  document.getElementById('uninsuredCount').textContent = `${uninsured.length} pendientes · ${confirmed.length} confirmados`;
+  const list = document.getElementById('listUninsured');
+  list.innerHTML = uninsured.map(r => `
+    <li class="rounded-md border px-3 py-2 ${r.ro === selectedInsuranceRO ? 'border-sky-300 bg-sky-50/60' : 'border-amber-100 bg-amber-50/40'}">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <button type="button" onclick="openInsuranceCalculator('${r.ro}')" class="text-sky-700 hover:underline font-semibold">RO ${r.ro}</button>
+          <div class="text-xs text-slate-500 truncate">${r.consignatario} · ${r.ruta}</div>
+          <span class="inline-block mt-1 text-[11px] rounded bg-amber-100 text-amber-800 px-1.5 py-0.5">Pendiente de confirmar</span>
+        </div>
+        <button type="button" onclick="openInsuranceCalculator('${r.ro}')" class="shrink-0 text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5">Gestionar</button>
+      </div>
+    </li>`).join('') || `<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">No hay operaciones pendientes de revisión de seguro.</li>`;
+}
+
+function openInsuranceCalculator(ro) {
+  const r = DATA.find(x => x.ro === ro);
+  if (!r) return;
+  selectedInsuranceRO = ro;
+  document.getElementById('insuranceCalculator').classList.remove('hidden');
+  document.getElementById('calcROLabel').textContent = `RO ${r.ro} · ${r.consignatario}`;
+  document.getElementById('insuredValue').value = '';
+  document.getElementById('insuranceRate').value = '0.30';
+  document.getElementById('premiumResult').value = '$0.00';
+  document.getElementById('insuranceFeedback').textContent = '';
+  document.getElementById('insuranceCalculator').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function calculatePremium() {
+  const value = Number(document.getElementById('insuredValue').value) || 0;
+  const rate = Number(document.getElementById('insuranceRate').value) || 0;
+  const premium = value * rate / 100;
+  document.getElementById('premiumResult').value = '$' + premium.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  return premium;
+}
+
+function saveCalculatedInsurance() {
+  const r = DATA.find(x => x.ro === selectedInsuranceRO);
+  if (!r) return;
+  const premium = calculatePremium();
+  if (premium <= 0) {
+    document.getElementById('insuranceFeedback').textContent = 'Ingresa un valor asegurado y una tasa válida para calcular la prima.';
+    return;
+  }
+  r.seguro = Number(premium.toFixed(2));
+  r.seguroEstado = 'CONTRATADO';
+  document.getElementById('insuranceFeedback').textContent = `Prima de USD ${premium.toFixed(2)} registrada para ${r.ro}.`;
+  applyFilters();
+}
+
+function confirmNoInsurance() {
+  const r = DATA.find(x => x.ro === selectedInsuranceRO);
+  if (!r) return;
+  if (!confirm(`¿Confirmas que la operación ${r.ro} no tiene seguro contratado?`)) return;
+  r.seguro = 0;
+  r.seguroEstado = 'NO_CONTRATADO';
+  document.getElementById('insuranceFeedback').textContent = `Se confirmó que ${r.ro} no tiene seguro contratado.`;
+  applyFilters();
+}
+
+function closeInsuranceCalculator() {
+  document.getElementById('insuranceCalculator').classList.add('hidden');
+  selectedInsuranceRO = null;
+}
+
+document.addEventListener('input', event => {
+  if (event.target && (event.target.id === 'insuredValue' || event.target.id === 'insuranceRate')) calculatePremium();
+});
+
+// ============ CSV ============
+function exportCSV() {
+  const cols = ['ro','consignatario','ruta','servicio','naviera','etd','eta','pendiente','broker','comision','seguro','cierre','validez','agente','ref','estado'];
+  const head = cols.join(',');
+  const body = DATA.map(r => cols.map(c => `"${(r[c]??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([head+'\n'+body], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'control_oportunidades.csv';
+  a.click();
+}
+
+// ============ INIT ============
+fillSelects();
+['fSearch','fRuta','fNaviera','fBroker','fServicio','fEstado'].forEach(id =>
+  document.getElementById(id).addEventListener('input', applyFilters)
+);
+applyFilters();
+renderCharts(DATA);
+</script>
+</body>
+</html>
