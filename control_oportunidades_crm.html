@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Control de Oportunidades — CRM Agente de Carga</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
   .card { box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
@@ -22,7 +23,7 @@
 
 <!-- HEADER -->
 <header class="bg-slate-900 text-white">
-  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-xl">🚢</div>
       <div>
@@ -30,7 +31,12 @@
         <p class="text-xs text-slate-400">CRM · Agente de Carga Internacional</p>
       </div>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="gantt_arribos.html" class="text-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 rounded-lg font-medium">📅 Calendario de arribos</a>
+      <label class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
+        Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelImport(this)">
+      </label>
+      <button onclick="downloadExcel(DATA, 'control_oportunidades.xlsx')" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Descargar Excel</button>
       <button onclick="exportCSV()" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Exportar CSV</button>
       <div class="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-sm font-semibold">ML</div>
     </div>
@@ -104,6 +110,8 @@
 </aside>
 
 <main class="min-w-0">
+
+  <div id="importFeedback" class="hidden mb-4 rounded-lg px-4 py-2 text-sm"></div>
 
   <!-- FILTROS -->
   <section class="bg-white rounded-xl card p-4 mb-6">
@@ -189,7 +197,7 @@
     </div>
     <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
       <span id="footerCount">Mostrando 0 oportunidades</span>
-      <span>Click en una fila para ver el detalle</span>
+      <span>Click en una fila para ver el detalle · <button type="button" onclick="restoreSample()" class="underline hover:text-slate-700">Restablecer datos de ejemplo</button></span>
     </div>
   </section>
 
@@ -231,7 +239,10 @@
         <h2 id="mTitle" class="text-lg font-semibold">—</h2>
         <p id="mSub" class="text-xs text-slate-500">—</p>
       </div>
-      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+      <div class="flex items-center gap-3">
+        <span id="mEstado" class="text-xs font-semibold rounded-full px-3 py-1"></span>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+      </div>
     </div>
     <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
@@ -245,7 +256,10 @@
         <dl id="mOperativo" class="text-sm space-y-1.5"></dl>
       </div>
       <div class="md:col-span-2">
-        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">⏱️ Timeline</h4>
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400">⏱️ Timeline</h4>
+          <span id="mHitoActual" class="text-xs font-medium"></span>
+        </div>
         <ul id="mTimeline" class="text-sm space-y-1.5"></ul>
       </div>
       <div class="md:col-span-2">
@@ -257,41 +271,152 @@
 </div>
 
 <script>
-// ============ DATOS DE EJEMPLO ============
-const DATA = [
-  { ro:'2024-01', consignatario:'ACME SAC', ruta:'LIM→SHA', servicio:'FCL', naviera:'Maersk', etd:'18/11/2024', eta:'12/12/2024', sem:'verde', prioridad: false, pendiente:4200,
-    broker:'ABC Brokers', comision:850, seguro:210, cierre:'10/11/2024', validez:'30/11/2024', agente:'—', ref:'ACME-2024-101', estado:'ABIERTA',
-    timeline:[['Booking confirmado','10/11',true],['Gate-in','13/11',true],['Loaded','18/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:[] },
-  { ro:'2024-02', consignatario:'Global Trade Perú', ruta:'LIM→RTM', servicio:'LCL', naviera:'MSC', etd:'20/11/2024', eta:'20/12/2024', sem:'ambar', prioridad: true, pendiente:1850,
-    broker:'XYZ Corp', comision:320, seguro:95, cierre:'12/11/2024', validez:'22/11/2024', agente:'Rotterdam Agent', ref:'GTP-2024-088', estado:'ABIERTA',
-    timeline:[['Booking confirmado','11/11',true],['Gate-in','16/11',true],['Loaded','20/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:['VALIDEZ vence en 3 días'] },
-  { ro:'2024-03', consignatario:'Import del Sur', ruta:'LIM→HAM', servicio:'FCL', naviera:'CMA CGM', etd:'15/11/2024', eta:'08/12/2024', sem:'rojo', prioridad: true, pendiente:6300,
-    broker:'ABC Brokers', comision:850, seguro:420, cierre:'10/11/2024', validez:'25/11/2024', agente:'Hansa Agent GmbH', ref:'IMP-2024-089', estado:'ABIERTA',
-    timeline:[['Booking confirmado','10/11',true],['Gate-in','13/11',true],['Loaded','15/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:['VALIDEZ vencida hace 2 días','PENDIENTE > 60 días — escalar a cobranza','ETA desviada +2 días'] },
-  { ro:'2024-04', consignatario:'Comercial Andina', ruta:'LIM→MIA', servicio:'Aéreo', naviera:'LATAM', etd:'19/11/2024', eta:'21/11/2024', sem:'verde', prioridad: false, pendiente:980,
-    broker:'Global Log', comision:140, seguro:45, cierre:'14/11/2024', validez:'28/11/2024', agente:'—', ref:'AND-2024-014', estado:'ABIERTA',
-    timeline:[['Booking confirmado','14/11',true],['Gate-in','18/11',true],['Loaded','19/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:[] },
-  { ro:'2024-05', consignatario:'Distribuidora XYZ', ruta:'LIM→BUE', servicio:'FCL', naviera:'Hapag', etd:'21/11/2024', eta:'15/12/2024', sem:'ambar', prioridad: true, pendiente:3450,
-    broker:'XYZ Corp', comision:410, seguro:180, cierre:'15/11/2024', validez:'24/11/2024', agente:'—', ref:'DXYZ-2024-032', estado:'ABIERTA',
-    timeline:[['Booking confirmado','15/11',true],['Gate-in','19/11',true],['Loaded','21/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:['VALIDEZ vence en 1 día'] },
-  { ro:'2024-06', consignatario:'Textiles Unidos', ruta:'LIM→VLC', servicio:'LCL', naviera:'ONE', etd:'14/11/2024', eta:'10/12/2024', sem:'rojo', prioridad: true, pendiente:2100,
-    broker:'Global Log', comision:260, seguro:0, cierre:'08/11/2024', validez:'20/11/2024', agente:'Valencia Agent', ref:'TXT-2024-076', estado:'ABIERTA',
-    timeline:[['Booking confirmado','08/11',true],['Gate-in','11/11',true],['Loaded','14/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:['Sin seguro registrado','PENDIENTE > 60 días','ETA desviada +3 días'] },
-  { ro:'2024-07', consignatario:'Agroexport S.A.', ruta:'LIM→QING', servicio:'FCL', naviera:'Maersk', etd:'22/11/2024', eta:'28/12/2024', sem:'verde', prioridad: false, pendiente:5600,
-    broker:'ABC Brokers', comision:920, seguro:280, cierre:'16/11/2024', validez:'02/12/2024', agente:'Qingdao Partner', ref:'AGRO-2024-045', estado:'ABIERTA',
-    timeline:[['Booking confirmado','16/11',true],['Gate-in','20/11',true],['Loaded','22/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:[] },
-  { ro:'2024-08', consignatario:'Minera del Norte', ruta:'LIM→BUS', servicio:'FCL', naviera:'MSC', etd:'17/11/2024', eta:'14/12/2024', sem:'ambar', prioridad: true, pendiente:8200,
-    broker:'XYZ Corp', comision:1100, seguro:390, cierre:'11/11/2024', validez:'23/11/2024', agente:'—', ref:'MIN-2024-051', estado:'ABIERTA',
-    timeline:[['Booking confirmado','11/11',true],['Gate-in','14/11',true],['Loaded','17/11',true],['In transit','',false],['Discharged','',false],['Delivered','',false]],
-    alertas:['PENDIENTE 30–60 días'] },
+// ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
+const MILESTONES = ['Booking confirmado','Gate-in','Loaded','In transit','Discharged','Delivered'];
+const MILESTONE_COLORS = {
+  'Sin booking':'#cbd5e1', 'Booking confirmado':'#94a3b8', 'Gate-in':'#8b5cf6', 'Loaded':'#0ea5e9',
+  'In transit':'#2563eb', 'Discharged':'#f59e0b', 'Delivered':'#10b981'
+};
+const STORAGE_KEY = 'crm_oportunidades_data_v1';
+
+// [clave interna, encabezado en Excel, tipo]
+const EXCEL_COLUMNS = [
+  ['ro','RO','text'], ['consignatario','Consignatario','text'], ['ruta','Ruta','text'], ['servicio','Servicio','text'],
+  ['naviera','Naviera','text'], ['etd','ETD','date'], ['eta','ETA','date'], ['estado','Estado','estado'],
+  ['prioridad','Prioridad','prioridad'], ['sem','Semáforo','sem'], ['pendiente','Pendiente USD','num'],
+  ['broker','Broker','text'], ['comision','Comisión USD','num'], ['seguro','Seguro prima USD','num'],
+  ['seguroEstado','Estado seguro','seguroEstado'], ['cierre','Cierre','date'], ['validez','Validez','date'],
+  ['agente','Agente/Coload','text'], ['ref','Ref cliente','text'],
+  ...MILESTONES.map(m => ['hito:' + m, m, 'date']),
+  ['alertas','Alertas','alertas'],
 ];
+
+const SAMPLE_DATA = [
+  { ro:'2024-01', consignatario:'ACME SAC', ruta:'LIM→SHA', servicio:'FCL', naviera:'Maersk', etd:'18/11/2024', eta:'12/12/2024', sem:'verde', prioridad:false, pendiente:4200,
+    broker:'ABC Brokers', comision:850, seguro:210, cierre:'10/11/2024', validez:'30/11/2024', agente:'—', ref:'ACME-2024-101', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'18/11/2024','In transit':'19/11/2024'}, alertas:[] },
+  { ro:'2024-02', consignatario:'Global Trade Perú', ruta:'LIM→RTM', servicio:'LCL', naviera:'MSC', etd:'20/11/2024', eta:'20/12/2024', sem:'ambar', prioridad:true, pendiente:1850,
+    broker:'XYZ Corp', comision:320, seguro:95, cierre:'12/11/2024', validez:'22/11/2024', agente:'Rotterdam Agent', ref:'GTP-2024-088', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'16/11/2024','Loaded':'20/11/2024','In transit':'21/11/2024'}, alertas:['VALIDEZ vence en 3 días'] },
+  { ro:'2024-03', consignatario:'Import del Sur', ruta:'LIM→HAM', servicio:'FCL', naviera:'CMA CGM', etd:'15/11/2024', eta:'08/12/2024', sem:'rojo', prioridad:true, pendiente:6300,
+    broker:'ABC Brokers', comision:850, seguro:420, cierre:'10/11/2024', validez:'25/11/2024', agente:'Hansa Agent GmbH', ref:'IMP-2024-089', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'15/11/2024','In transit':'16/11/2024'}, alertas:['VALIDEZ vencida hace 2 días','PENDIENTE > 60 días — escalar a cobranza','ETA desviada +2 días'] },
+  { ro:'2024-04', consignatario:'Comercial Andina', ruta:'LIM→MIA', servicio:'Aéreo', naviera:'LATAM', etd:'19/11/2024', eta:'21/11/2024', sem:'verde', prioridad:false, pendiente:980,
+    broker:'Global Log', comision:140, seguro:45, cierre:'14/11/2024', validez:'28/11/2024', agente:'—', ref:'AND-2024-014', estado:'CERRADA',
+    hitos:{'Booking confirmado':'14/11/2024','Gate-in':'18/11/2024','Loaded':'19/11/2024','In transit':'19/11/2024','Discharged':'21/11/2024','Delivered':'22/11/2024'}, alertas:[] },
+  { ro:'2024-05', consignatario:'Distribuidora XYZ', ruta:'LIM→BUE', servicio:'FCL', naviera:'Hapag', etd:'21/11/2024', eta:'15/12/2024', sem:'ambar', prioridad:true, pendiente:3450,
+    broker:'XYZ Corp', comision:410, seguro:180, cierre:'15/11/2024', validez:'24/11/2024', agente:'—', ref:'DXYZ-2024-032', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'15/11/2024','Gate-in':'19/11/2024','Loaded':'21/11/2024'}, alertas:['VALIDEZ vence en 1 día'] },
+  { ro:'2024-06', consignatario:'Textiles Unidos', ruta:'LIM→VLC', servicio:'LCL', naviera:'ONE', etd:'14/11/2024', eta:'10/12/2024', sem:'rojo', prioridad:true, pendiente:2100,
+    broker:'Global Log', comision:260, seguro:0, cierre:'08/11/2024', validez:'20/11/2024', agente:'Valencia Agent', ref:'TXT-2024-076', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'08/11/2024','Gate-in':'11/11/2024','Loaded':'14/11/2024','In transit':'15/11/2024'}, alertas:['Sin seguro registrado','PENDIENTE > 60 días','ETA desviada +3 días'] },
+  { ro:'2024-07', consignatario:'Agroexport S.A.', ruta:'LIM→QING', servicio:'FCL', naviera:'Maersk', etd:'22/11/2024', eta:'28/12/2024', sem:'verde', prioridad:false, pendiente:5600,
+    broker:'ABC Brokers', comision:920, seguro:280, cierre:'16/11/2024', validez:'02/12/2024', agente:'Qingdao Partner', ref:'AGRO-2024-045', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'16/11/2024','Gate-in':'20/11/2024'}, alertas:[] },
+  { ro:'2024-08', consignatario:'Minera del Norte', ruta:'LIM→BUS', servicio:'FCL', naviera:'MSC', etd:'17/11/2024', eta:'14/12/2024', sem:'ambar', prioridad:true, pendiente:8200,
+    broker:'XYZ Corp', comision:1100, seguro:390, cierre:'11/11/2024', validez:'23/11/2024', agente:'—', ref:'MIN-2024-051', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'14/11/2024','Loaded':'17/11/2024','In transit':'18/11/2024'}, alertas:['PENDIENTE 30–60 días'] },
+];
+
+function loadData() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) { const d = JSON.parse(s); if (Array.isArray(d) && d.length) return d; }
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(SAMPLE_DATA));
+}
+function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); } catch (e) {} }
+function resetData() { try { localStorage.removeItem(STORAGE_KEY); } catch (e) {} return JSON.parse(JSON.stringify(SAMPLE_DATA)); }
+
+// Fechas: se guardan como texto dd/mm/aaaa
+const pad2 = n => String(n).padStart(2, '0');
+function fmtDate(d) { return d ? `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}` : ''; }
+function parseDate(s) {
+  const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  return new Date(y, Number(m[2]) - 1, Number(m[1]));
+}
+function normDate(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date && !isNaN(v)) return fmtDate(new Date(v.getFullYear(), v.getMonth(), v.getDate()));
+  if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 864e5)); return fmtDate(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); }
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${pad2(iso[3])}/${pad2(iso[2])}/${iso[1]}`;
+  const d = parseDate(s);
+  return d ? fmtDate(d) : s;
+}
+function currentMilestone(r) {
+  let cur = 'Sin booking';
+  MILESTONES.forEach(m => { if (r.hitos && r.hitos[m]) cur = m; });
+  return cur;
+}
+const normKey = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function rowsFromSheet(json) {
+  return json.map(raw => {
+    const byKey = {};
+    Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const get = (key, header) => {
+      for (const k of [normKey(header), normKey(key.replace('hito:', '')), normKey(header.replace(/usd/i, ''))]) if (k in byKey) return byKey[k];
+      return '';
+    };
+    const r = { hitos: {}, alertas: [] };
+    EXCEL_COLUMNS.forEach(([key, header, type]) => {
+      const v = get(key, header);
+      let val;
+      switch (type) {
+        case 'num': val = Number(String(v).replace(/[$,\s]/g, '')) || 0; break;
+        case 'date': val = normDate(v); break;
+        case 'prioridad': val = /^(si|sí|alta|true|1|x)$/i.test(String(v).trim()); break;
+        case 'sem': { const s = normKey(v); val = s.startsWith('roj') ? 'rojo' : s.startsWith('amb') || s.startsWith('ama') ? 'ambar' : 'verde'; break; }
+        case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
+        case 'seguroEstado': { const s = normKey(v); val = s.includes('nocontratado') || s === 'no' ? 'NO_CONTRATADO' : s.includes('contratado') ? 'CONTRATADO' : ''; break; }
+        case 'alertas': val = String(v || '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
+        default: val = String(v ?? '').trim();
+      }
+      if (key.startsWith('hito:')) { if (val) r.hitos[key.slice(5)] = val; }
+      else r[key] = val;
+    });
+    if (!r.agente) r.agente = '—';
+    return r;
+  }).filter(r => r.ro);
+}
+
+function rowsToSheet(data) {
+  return data.map(r => {
+    const o = {};
+    EXCEL_COLUMNS.forEach(([key, header, type]) => {
+      let v = key.startsWith('hito:') ? (r.hitos || {})[key.slice(5)] || '' : r[key];
+      if (type === 'prioridad') v = v ? 'Alta' : 'Normal';
+      else if (type === 'seguroEstado') v = v === 'NO_CONTRATADO' ? 'No contratado' : v === 'CONTRATADO' ? 'Contratado' : '';
+      else if (type === 'alertas') v = (v || []).join('; ');
+      o[header] = v ?? '';
+    });
+    return o;
+  });
+}
+
+async function importExcelFile(file) {
+  if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const name = wb.SheetNames.find(n => normKey(n) === 'oportunidades') || wb.SheetNames[0];
+  const rows = rowsFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true }));
+  if (!rows.length) throw new Error('No se encontraron filas con RO en la hoja "' + name + '".');
+  return rows;
+}
+
+function downloadExcel(data, filename) {
+  if (!window.XLSX) { alert('No se pudo cargar la librería de Excel (revisa tu conexión a internet).'); return; }
+  const ws = XLSX.utils.json_to_sheet(rowsToSheet(data), { header: EXCEL_COLUMNS.map(c => c[1]) });
+  ws['!cols'] = EXCEL_COLUMNS.map(c => ({ wch: Math.max(12, c[1].length + 2) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Oportunidades');
+  XLSX.writeFile(wb, filename);
+}
+
+let DATA = loadData();
 
 // ============ HELPERS ============
 const fmt$ = n => '$' + n.toLocaleString('en-US');
@@ -351,7 +476,7 @@ function updateKPIs(rows) {
 // ============ FILTROS ============
 function fillSelects() {
   const uniq = k => [...new Set(DATA.map(d=>d[k]))].sort();
-  const add = (id, arr) => { const s=document.getElementById(id); arr.forEach(v=>s.insertAdjacentHTML('beforeend',`<option>${v}</option>`)); };
+  const add = (id, arr) => { const s=document.getElementById(id); s.length = 1; arr.forEach(v=>s.insertAdjacentHTML('beforeend',`<option>${v}</option>`)); };
   add('fRuta', uniq('ruta')); add('fNaviera', uniq('naviera')); add('fBroker', uniq('broker')); add('fServicio', uniq('servicio'));
 }
 
@@ -384,6 +509,9 @@ function openModal(ro) {
   const r = DATA.find(d=>d.ro===ro); if(!r) return;
   document.getElementById('mTitle').textContent = `RO ${r.ro} — ${r.consignatario}`;
   document.getElementById('mSub').textContent = `${r.ruta} · ${r.servicio} · ${r.naviera}`;
+  const est = document.getElementById('mEstado');
+  est.textContent = r.estado;
+  est.className = 'text-xs font-semibold rounded-full px-3 py-1 ' + (ESTADO_BADGE[r.estado] || 'bg-slate-100 text-slate-700');
 
   document.getElementById('mComercial').innerHTML = dl([
     ['Broker', r.broker], ['Comisión', fmt$(r.comision)],
@@ -397,12 +525,19 @@ function openModal(ro) {
     ['ETD', r.etd], ['ETA', r.eta], ['Agente/Coload', r.agente], ['Ref cliente', r.ref]
   ]);
 
-  document.getElementById('mTimeline').innerHTML = r.timeline.map(([label,date,done])=>`
-    <li class="flex items-center gap-2 ${done?'text-slate-700':'text-slate-400'}">
-      <span class="w-4 text-center">${done?'✔':'○'}</span>
-      <span class="flex-1">${label}</span>
-      <span class="text-xs">${date||''}</span>
-    </li>`).join('');
+  const actual = currentMilestone(r);
+  const hitoEl = document.getElementById('mHitoActual');
+  hitoEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${MILESTONE_COLORS[actual]}"></span>Estado actual: ${actual}`;
+  document.getElementById('mTimeline').innerHTML = MILESTONES.map(m => {
+    const date = (r.hitos || {})[m] || '';
+    const done = !!date;
+    return `
+    <li class="flex items-center gap-2 ${done?'text-slate-700':'text-slate-400'} ${m===actual?'font-semibold':''}">
+      <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] text-white" style="background:${done ? MILESTONE_COLORS[m] : '#e2e8f0'}">${done?'✔':''}</span>
+      <span class="flex-1">${m}</span>
+      <span class="text-xs">${date}</span>
+    </li>`;
+  }).join('');
 
   document.getElementById('mAlertas').innerHTML = r.alertas.length
     ? r.alertas.map(a=>`<li class="text-red-600">• ${a}</li>`).join('')
@@ -411,6 +546,12 @@ function openModal(ro) {
   document.getElementById('modal').classList.remove('hidden');
   document.body.classList.add('modal-open');
 }
+const ESTADO_BADGE = {
+  ABIERTA:'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300',
+  CERRADA:'bg-red-100 text-red-700 ring-1 ring-red-300',
+  GANADA:'bg-sky-100 text-sky-700 ring-1 ring-sky-300',
+  PERDIDA:'bg-slate-200 text-slate-700 ring-1 ring-slate-300'
+};
 function dl(items){ return items.map(([k,v])=>`<div class="flex justify-between gap-2"><dt class="text-slate-500">${k}</dt><dd class="font-medium text-slate-700 text-right">${v}</dd></div>`).join(''); }
 function closeModal(){ document.getElementById('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 
@@ -446,6 +587,7 @@ function togglePriority(ro, checked) {
   const r = DATA.find(x => x.ro === ro);
   if (!r) return;
   r.prioridad = checked;
+  saveData();
   applyFilters();
 }
 
@@ -535,6 +677,7 @@ function saveCalculatedInsurance() {
   }
   r.seguro = Number(premium.toFixed(2));
   r.seguroEstado = 'CONTRATADO';
+  saveData();
   document.getElementById('insuranceFeedback').textContent = `Prima de USD ${premium.toFixed(2)} registrada para ${r.ro}.`;
   applyFilters();
 }
@@ -545,6 +688,7 @@ function confirmNoInsurance() {
   if (!confirm(`¿Confirmas que la operación ${r.ro} no tiene seguro contratado?`)) return;
   r.seguro = 0;
   r.seguroEstado = 'NO_CONTRATADO';
+  saveData();
   document.getElementById('insuranceFeedback').textContent = `Se confirmó que ${r.ro} no tiene seguro contratado.`;
   applyFilters();
 }
@@ -562,14 +706,43 @@ document.addEventListener('input', event => {
 
 // ============ CSV ============
 function exportCSV() {
-  const cols = ['ro','consignatario','ruta','servicio','naviera','etd','eta','pendiente','broker','comision','seguro','cierre','validez','agente','ref','estado'];
-  const head = cols.join(',');
-  const body = DATA.map(r => cols.map(c => `"${(r[c]??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([head+'\n'+body], {type:'text/csv;charset=utf-8;'});
+  const rows = rowsToSheet(DATA);
+  const headers = EXCEL_COLUMNS.map(c => c[1]);
+  const esc = v => `"${(v ?? '').toString().replace(/"/g,'""')}"`;
+  const csv = '\ufeff' + headers.map(esc).join(',') + '\n' + rows.map(o => headers.map(h => esc(o[h])).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'control_oportunidades.csv';
   a.click();
+}
+
+// ============ IMPORTAR EXCEL ============
+function showImportFeedback(msg, ok) {
+  const el = document.getElementById('importFeedback');
+  el.textContent = msg;
+  el.className = 'mb-4 rounded-lg px-4 py-2 text-sm ' + (ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200');
+}
+async function handleExcelImport(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    DATA = await importExcelFile(file);
+    saveData();
+    fillSelects();
+    applyFilters();
+    showImportFeedback(`Se importaron ${DATA.length} oportunidades desde "${file.name}". El calendario de arribos usa los mismos datos.`, true);
+  } catch (e) {
+    showImportFeedback('No se pudo importar el Excel: ' + e.message, false);
+  }
+  input.value = '';
+}
+function restoreSample() {
+  if (!confirm('¿Restablecer los datos de ejemplo? Se perderán los datos importados en este navegador.')) return;
+  DATA = resetData();
+  fillSelects();
+  applyFilters();
+  showImportFeedback('Se restablecieron los datos de ejemplo.', true);
 }
 
 // ============ INIT ============
@@ -579,7 +752,9 @@ fillSelects();
   document.getElementById(id).addEventListener('input', applyFilters)
 );
 applyFilters();
-renderCharts(DATA);
+// Abrir detalle desde el calendario: control_oportunidades_crm.html#ro=2024-01
+const hashRO = decodeURIComponent((location.hash.match(/^#ro=(.+)$/) || [])[1] || '');
+if (hashRO) openModal(hashRO);
 </script>
 </body>
 </html>

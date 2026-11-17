@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Calendario de Arribos — CRM Agente de Carga</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  .card { box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .g-wrap { position: relative; }
+  .g-left { position: sticky; left: 0; z-index: 5; background: #fff; }
+  .g-head .g-left { z-index: 7; background: #f8fafc; }
+  .g-head { position: sticky; top: 0; z-index: 6; background: #f8fafc; }
+  .g-day { flex: 0 0 auto; text-align: center; border-left: 1px solid #f1f5f9; }
+  .g-weekend { background: rgba(148,163,184,.10); }
+  .g-plan { background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.18) 0 6px, rgba(100,116,139,.06) 6px 12px); border: 1px dashed #94a3b8; }
+  .g-row:hover .g-left, .g-row:hover .g-track { background-color: #f8fafc; }
+  .g-row { cursor: pointer; }
+  select, input { outline: none; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+<header class="bg-slate-900 text-white">
+  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-xl">📅</div>
+      <div>
+        <h1 class="text-lg font-semibold leading-tight">Calendario de Arribos</h1>
+        <p class="text-xs text-slate-400">Timeline tipo Gantt · ETD → ETA por estado de la carga</p>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="control_oportunidades_crm.html" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">← Volver al CRM</a>
+      <label class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
+        Importar Excel<input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelImport(this)">
+      </label>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  <div id="importFeedback" class="hidden rounded-lg px-4 py-2 text-sm"></div>
+
+  <!-- CONTROLES -->
+  <section class="bg-white rounded-xl card p-4 flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Fecha de corte</label>
+      <input id="fCorte" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">"Pronto a arribar" = ETA en ≤</label>
+      <select id="fVentana" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="3">3 días</option><option value="7" selected>7 días</option><option value="15">15 días</option><option value="30">30 días</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Estado timeline</label>
+      <select id="fHito" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]"><option value="">Todos</option></select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Oportunidad</label>
+      <select id="fEstado" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="">Todas</option><option>ABIERTA</option><option>CERRADA</option><option>GANADA</option><option>PERDIDA</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Zoom</label>
+      <select id="fZoom" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="20">Compacto</option><option value="30" selected>Normal</option><option value="44">Amplio</option>
+      </select>
+    </div>
+    <p id="corteNote" class="text-xs text-slate-500 basis-full"></p>
+  </section>
+
+  <!-- RESUMEN -->
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-white rounded-xl card p-4 border-l-4 border-amber-500">
+      <p class="text-xs font-medium text-slate-500">Pronto a arribar</p>
+      <p id="kProximos" class="text-2xl font-semibold mt-1">0</p>
+      <p id="kProximosSub" class="text-xs text-slate-500 mt-1">ETA en los próximos 7 días</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4 border-l-4 border-blue-600">
+      <p class="text-xs font-medium text-slate-500">En tránsito</p>
+      <p id="kTransito" class="text-2xl font-semibold mt-1">0</p>
+      <p class="text-xs text-slate-500 mt-1">estado "In transit"</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4 border-l-4 border-red-500">
+      <p class="text-xs font-medium text-slate-500">ETA superada sin descarga</p>
+      <p id="kVencidas" class="text-2xl font-semibold mt-1">0</p>
+      <p class="text-xs text-slate-500 mt-1">revisar con la naviera</p>
+    </div>
+    <div class="bg-white rounded-xl card p-4 border-l-4 border-emerald-500">
+      <p class="text-xs font-medium text-slate-500">Entregadas</p>
+      <p id="kEntregadas" class="text-2xl font-semibold mt-1">0</p>
+      <p class="text-xs text-slate-500 mt-1">estado "Delivered"</p>
+    </div>
+  </section>
+
+  <!-- PRÓXIMOS ARRIBOS -->
+  <section class="bg-white rounded-xl card p-4">
+    <h3 class="text-sm font-semibold text-slate-800 mb-3">🔔 Cargas por arribar (ordenadas por ETA)</h3>
+    <div id="proximos" class="flex gap-3 overflow-x-auto pb-1"></div>
+  </section>
+
+  <!-- GANTT -->
+  <section class="bg-white rounded-xl card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-sm font-semibold text-slate-800">Timeline de embarques</h3>
+      <div id="legend" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600"></div>
+    </div>
+    <div id="gantt" class="overflow-auto max-h-[70vh]"></div>
+    <div class="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 flex flex-wrap gap-x-6 gap-y-1">
+      <span>Barra de color = hitos cumplidos (cada tramo con el color del estado) · Tramo rayado = recorrido pendiente hasta ETA</span>
+      <span>▲ ETD · 🏁 ETA · <span class="text-red-600 font-medium">│</span> fecha de corte</span>
+      <span>Click en una carga para abrir su detalle en el CRM</span>
+    </div>
+  </section>
+</main>
+
+<script>
+// ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
+const MILESTONES = ['Booking confirmado','Gate-in','Loaded','In transit','Discharged','Delivered'];
+const MILESTONE_COLORS = {
+  'Sin booking':'#cbd5e1', 'Booking confirmado':'#94a3b8', 'Gate-in':'#8b5cf6', 'Loaded':'#0ea5e9',
+  'In transit':'#2563eb', 'Discharged':'#f59e0b', 'Delivered':'#10b981'
+};
+const STORAGE_KEY = 'crm_oportunidades_data_v1';
+
+// [clave interna, encabezado en Excel, tipo]
+const EXCEL_COLUMNS = [
+  ['ro','RO','text'], ['consignatario','Consignatario','text'], ['ruta','Ruta','text'], ['servicio','Servicio','text'],
+  ['naviera','Naviera','text'], ['etd','ETD','date'], ['eta','ETA','date'], ['estado','Estado','estado'],
+  ['prioridad','Prioridad','prioridad'], ['sem','Semáforo','sem'], ['pendiente','Pendiente USD','num'],
+  ['broker','Broker','text'], ['comision','Comisión USD','num'], ['seguro','Seguro prima USD','num'],
+  ['seguroEstado','Estado seguro','seguroEstado'], ['cierre','Cierre','date'], ['validez','Validez','date'],
+  ['agente','Agente/Coload','text'], ['ref','Ref cliente','text'],
+  ...MILESTONES.map(m => ['hito:' + m, m, 'date']),
+  ['alertas','Alertas','alertas'],
+];
+
+const SAMPLE_DATA = [
+  { ro:'2024-01', consignatario:'ACME SAC', ruta:'LIM→SHA', servicio:'FCL', naviera:'Maersk', etd:'18/11/2024', eta:'12/12/2024', sem:'verde', prioridad:false, pendiente:4200,
+    broker:'ABC Brokers', comision:850, seguro:210, cierre:'10/11/2024', validez:'30/11/2024', agente:'—', ref:'ACME-2024-101', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'18/11/2024','In transit':'19/11/2024'}, alertas:[] },
+  { ro:'2024-02', consignatario:'Global Trade Perú', ruta:'LIM→RTM', servicio:'LCL', naviera:'MSC', etd:'20/11/2024', eta:'20/12/2024', sem:'ambar', prioridad:true, pendiente:1850,
+    broker:'XYZ Corp', comision:320, seguro:95, cierre:'12/11/2024', validez:'22/11/2024', agente:'Rotterdam Agent', ref:'GTP-2024-088', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'16/11/2024','Loaded':'20/11/2024','In transit':'21/11/2024'}, alertas:['VALIDEZ vence en 3 días'] },
+  { ro:'2024-03', consignatario:'Import del Sur', ruta:'LIM→HAM', servicio:'FCL', naviera:'CMA CGM', etd:'15/11/2024', eta:'08/12/2024', sem:'rojo', prioridad:true, pendiente:6300,
+    broker:'ABC Brokers', comision:850, seguro:420, cierre:'10/11/2024', validez:'25/11/2024', agente:'Hansa Agent GmbH', ref:'IMP-2024-089', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'15/11/2024','In transit':'16/11/2024'}, alertas:['VALIDEZ vencida hace 2 días','PENDIENTE > 60 días — escalar a cobranza','ETA desviada +2 días'] },
+  { ro:'2024-04', consignatario:'Comercial Andina', ruta:'LIM→MIA', servicio:'Aéreo', naviera:'LATAM', etd:'19/11/2024', eta:'21/11/2024', sem:'verde', prioridad:false, pendiente:980,
+    broker:'Global Log', comision:140, seguro:45, cierre:'14/11/2024', validez:'28/11/2024', agente:'—', ref:'AND-2024-014', estado:'CERRADA',
+    hitos:{'Booking confirmado':'14/11/2024','Gate-in':'18/11/2024','Loaded':'19/11/2024','In transit':'19/11/2024','Discharged':'21/11/2024','Delivered':'22/11/2024'}, alertas:[] },
+  { ro:'2024-05', consignatario:'Distribuidora XYZ', ruta:'LIM→BUE', servicio:'FCL', naviera:'Hapag', etd:'21/11/2024', eta:'15/12/2024', sem:'ambar', prioridad:true, pendiente:3450,
+    broker:'XYZ Corp', comision:410, seguro:180, cierre:'15/11/2024', validez:'24/11/2024', agente:'—', ref:'DXYZ-2024-032', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'15/11/2024','Gate-in':'19/11/2024','Loaded':'21/11/2024'}, alertas:['VALIDEZ vence en 1 día'] },
+  { ro:'2024-06', consignatario:'Textiles Unidos', ruta:'LIM→VLC', servicio:'LCL', naviera:'ONE', etd:'14/11/2024', eta:'10/12/2024', sem:'rojo', prioridad:true, pendiente:2100,
+    broker:'Global Log', comision:260, seguro:0, cierre:'08/11/2024', validez:'20/11/2024', agente:'Valencia Agent', ref:'TXT-2024-076', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'08/11/2024','Gate-in':'11/11/2024','Loaded':'14/11/2024','In transit':'15/11/2024'}, alertas:['Sin seguro registrado','PENDIENTE > 60 días','ETA desviada +3 días'] },
+  { ro:'2024-07', consignatario:'Agroexport S.A.', ruta:'LIM→QING', servicio:'FCL', naviera:'Maersk', etd:'22/11/2024', eta:'28/12/2024', sem:'verde', prioridad:false, pendiente:5600,
+    broker:'ABC Brokers', comision:920, seguro:280, cierre:'16/11/2024', validez:'02/12/2024', agente:'Qingdao Partner', ref:'AGRO-2024-045', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'16/11/2024','Gate-in':'20/11/2024'}, alertas:[] },
+  { ro:'2024-08', consignatario:'Minera del Norte', ruta:'LIM→BUS', servicio:'FCL', naviera:'MSC', etd:'17/11/2024', eta:'14/12/2024', sem:'ambar', prioridad:true, pendiente:8200,
+    broker:'XYZ Corp', comision:1100, seguro:390, cierre:'11/11/2024', validez:'23/11/2024', agente:'—', ref:'MIN-2024-051', estado:'ABIERTA',
+    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'14/11/2024','Loaded':'17/11/2024','In transit':'18/11/2024'}, alertas:['PENDIENTE 30–60 días'] },
+];
+
+function loadData() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) { const d = JSON.parse(s); if (Array.isArray(d) && d.length) return d; }
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(SAMPLE_DATA));
+}
+function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); } catch (e) {} }
+function resetData() { try { localStorage.removeItem(STORAGE_KEY); } catch (e) {} return JSON.parse(JSON.stringify(SAMPLE_DATA)); }
+
+// Fechas: se guardan como texto dd/mm/aaaa
+const pad2 = n => String(n).padStart(2, '0');
+function fmtDate(d) { return d ? `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}` : ''; }
+function parseDate(s) {
+  const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  return new Date(y, Number(m[2]) - 1, Number(m[1]));
+}
+function normDate(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date && !isNaN(v)) return fmtDate(new Date(v.getFullYear(), v.getMonth(), v.getDate()));
+  if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 864e5)); return fmtDate(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); }
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${pad2(iso[3])}/${pad2(iso[2])}/${iso[1]}`;
+  const d = parseDate(s);
+  return d ? fmtDate(d) : s;
+}
+function currentMilestone(r) {
+  let cur = 'Sin booking';
+  MILESTONES.forEach(m => { if (r.hitos && r.hitos[m]) cur = m; });
+  return cur;
+}
+const normKey = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function rowsFromSheet(json) {
+  return json.map(raw => {
+    const byKey = {};
+    Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const get = (key, header) => {
+      for (const k of [normKey(header), normKey(key.replace('hito:', '')), normKey(header.replace(/usd/i, ''))]) if (k in byKey) return byKey[k];
+      return '';
+    };
+    const r = { hitos: {}, alertas: [] };
+    EXCEL_COLUMNS.forEach(([key, header, type]) => {
+      const v = get(key, header);
+      let val;
+      switch (type) {
+        case 'num': val = Number(String(v).replace(/[$,\s]/g, '')) || 0; break;
+        case 'date': val = normDate(v); break;
+        case 'prioridad': val = /^(si|sí|alta|true|1|x)$/i.test(String(v).trim()); break;
+        case 'sem': { const s = normKey(v); val = s.startsWith('roj') ? 'rojo' : s.startsWith('amb') || s.startsWith('ama') ? 'ambar' : 'verde'; break; }
+        case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
+        case 'seguroEstado': { const s = normKey(v); val = s.includes('nocontratado') || s === 'no' ? 'NO_CONTRATADO' : s.includes('contratado') ? 'CONTRATADO' : ''; break; }
+        case 'alertas': val = String(v || '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
+        default: val = String(v ?? '').trim();
+      }
+      if (key.startsWith('hito:')) { if (val) r.hitos[key.slice(5)] = val; }
+      else r[key] = val;
+    });
+    if (!r.agente) r.agente = '—';
+    return r;
+  }).filter(r => r.ro);
+}
+
+function rowsToSheet(data) {
+  return data.map(r => {
+    const o = {};
+    EXCEL_COLUMNS.forEach(([key, header, type]) => {
+      let v = key.startsWith('hito:') ? (r.hitos || {})[key.slice(5)] || '' : r[key];
+      if (type === 'prioridad') v = v ? 'Alta' : 'Normal';
+      else if (type === 'seguroEstado') v = v === 'NO_CONTRATADO' ? 'No contratado' : v === 'CONTRATADO' ? 'Contratado' : '';
+      else if (type === 'alertas') v = (v || []).join('; ');
+      o[header] = v ?? '';
+    });
+    return o;
+  });
+}
+
+async function importExcelFile(file) {
+  if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const name = wb.SheetNames.find(n => normKey(n) === 'oportunidades') || wb.SheetNames[0];
+  const rows = rowsFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true }));
+  if (!rows.length) throw new Error('No se encontraron filas con RO en la hoja "' + name + '".');
+  return rows;
+}
+
+function downloadExcel(data, filename) {
+  if (!window.XLSX) { alert('No se pudo cargar la librería de Excel (revisa tu conexión a internet).'); return; }
+  const ws = XLSX.utils.json_to_sheet(rowsToSheet(data), { header: EXCEL_COLUMNS.map(c => c[1]) });
+  ws['!cols'] = EXCEL_COLUMNS.map(c => ({ wch: Math.max(12, c[1].length + 2) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Oportunidades');
+  XLSX.writeFile(wb, filename);
+}
+
+let DATA = loadData();
+
+const DAY = 864e5;
+let LEFT_W = 260;
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const diffDays = (a, b) => Math.round((b - a) / DAY);
+const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const ESTADO_BADGE = { ABIERTA:'bg-emerald-100 text-emerald-700', CERRADA:'bg-red-100 text-red-700', GANADA:'bg-sky-100 text-sky-700', PERDIDA:'bg-slate-200 text-slate-700' };
+const isoOf = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+// Fecha de corte por defecto: hoy; si los datos no llegan a hoy (p. ej. datos de ejemplo), el último hito registrado.
+function defaultCorte() {
+  const today = new Date(); const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const all = [];
+  DATA.forEach(r => { [r.etd, r.eta, ...Object.values(r.hitos || {})].forEach(s => { const d = parseDate(s); if (d) all.push(d); }); });
+  if (!all.length) return { d: t, adjusted: false };
+  const min = new Date(Math.min(...all)), max = new Date(Math.max(...all));
+  if (t >= addDays(min, -30) && t <= addDays(max, 30)) return { d: t, adjusted: false };
+  const hitos = [];
+  DATA.forEach(r => Object.values(r.hitos || {}).forEach(s => { const d = parseDate(s); if (d) hitos.push(d); }));
+  return { d: hitos.length ? new Date(Math.max(...hitos)) : min, adjusted: true };
+}
+function setDefaultCorte() {
+  const c = defaultCorte();
+  document.getElementById('fCorte').value = isoOf(c.d);
+  document.getElementById('corteNote').textContent = c.adjusted
+    ? 'La fecha de corte se ajustó al último hito registrado porque los datos no llegan a la fecha de hoy. Puedes cambiarla.'
+    : 'La fecha de corte es hoy. Puedes cambiarla para simular otro día.';
+}
+function getCorte() {
+  const v = document.getElementById('fCorte').value;
+  if (!v) return defaultCorte().d;
+  const [y, m, d] = v.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function shipInfo(r, corte, ventana) {
+  const etd = parseDate(r.etd), eta = parseDate(r.eta);
+  const hito = currentMilestone(r);
+  const arrived = ['Discharged', 'Delivered'].includes(hito);
+  const dias = eta ? diffDays(corte, eta) : null;
+  let tag = 'normal';
+  if (hito === 'Delivered') tag = 'entregada';
+  else if (arrived) tag = 'arribada';
+  else if (dias !== null && dias < 0) tag = 'vencida';
+  else if (dias !== null && dias <= ventana) tag = 'proxima';
+  return { etd, eta, hito, dias, tag };
+}
+const TAG_STYLE = {
+  proxima:   { badge:'bg-amber-100 text-amber-800', row:'border-l-4 border-amber-400', label: i => i.dias === 0 ? 'Arriba hoy' : `Arriba en ${i.dias} d` },
+  vencida:   { badge:'bg-red-100 text-red-700',     row:'border-l-4 border-red-500',   label: i => `ETA superada ${-i.dias} d` },
+  arribada:  { badge:'bg-orange-100 text-orange-700', row:'border-l-4 border-orange-300', label: () => 'Descargada' },
+  entregada: { badge:'bg-emerald-100 text-emerald-700', row:'border-l-4 border-emerald-400', label: () => 'Entregada' },
+  normal:    { badge:'bg-slate-100 text-slate-600', row:'border-l-4 border-transparent', label: i => i.dias === null ? 'Sin ETA' : `ETA en ${i.dias} d` },
+};
+
+function filteredRows() {
+  const fh = document.getElementById('fHito').value;
+  const fe = document.getElementById('fEstado').value;
+  return DATA.filter(r => (!fh || currentMilestone(r) === fh) && (!fe || r.estado === fe));
+}
+
+function render() {
+  const corte = getCorte();
+  const ventana = Number(document.getElementById('fVentana').value);
+  const dayW = Number(document.getElementById('fZoom').value);
+  LEFT_W = window.innerWidth < 640 ? 170 : 260;
+  const rows = filteredRows().map(r => ({ r, i: shipInfo(r, corte, ventana) }))
+    .sort((a, b) => (a.i.eta || 0) - (b.i.eta || 0));
+
+  // KPIs
+  document.getElementById('kProximos').textContent = rows.filter(x => x.i.tag === 'proxima').length;
+  document.getElementById('kProximosSub').textContent = `ETA en los próximos ${ventana} días`;
+  document.getElementById('kTransito').textContent = rows.filter(x => x.i.hito === 'In transit').length;
+  document.getElementById('kVencidas').textContent = rows.filter(x => x.i.tag === 'vencida').length;
+  document.getElementById('kEntregadas').textContent = rows.filter(x => x.i.hito === 'Delivered').length;
+
+  // Tarjetas de próximos arribos
+  const pend = rows.filter(x => !['entregada', 'arribada'].includes(x.i.tag));
+  document.getElementById('proximos').innerHTML = pend.map(({ r, i }) => {
+    const st = TAG_STYLE[i.tag];
+    return `<a href="control_oportunidades_crm.html#ro=${encodeURIComponent(r.ro)}" class="shrink-0 w-56 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 ${st.row}">
+      <div class="flex justify-between items-start gap-2">
+        <span class="font-semibold text-slate-800">RO ${r.ro}</span>
+        <span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${st.badge}">${st.label(i)}</span>
+      </div>
+      <div class="text-xs text-slate-500 truncate">${r.consignatario}</div>
+      <div class="text-xs text-slate-500">${r.ruta} · ${r.naviera}</div>
+      <div class="mt-2 flex items-center justify-between text-xs">
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${MILESTONE_COLORS[i.hito]}"></span>${i.hito}</span>
+        <span class="text-slate-600">ETA ${r.eta || '—'}</span>
+      </div>
+    </a>`;
+  }).join('') || '<p class="text-xs text-slate-400">No hay cargas pendientes de arribo.</p>';
+
+  // Rango de fechas del Gantt
+  const dates = [corte];
+  rows.forEach(({ r, i }) => { [i.etd, i.eta, ...Object.values(r.hitos || {}).map(parseDate)].forEach(d => d && dates.push(d)); });
+  const start = addDays(new Date(Math.min(...dates)), -3);
+  const end = addDays(new Date(Math.max(...dates)), 5);
+  const nDays = diffDays(start, end) + 1;
+  const W = nDays * dayW;
+  const x = d => diffDays(start, d) * dayW;
+
+  // Encabezado: meses y días
+  let months = '', days = '';
+  for (let k = 0; k < nDays; ) {
+    const d = addDays(start, k);
+    const left = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const span = Math.min(nDays - k, diffDays(d, left));
+    months += `<div class="g-day text-xs font-semibold text-slate-600 py-1 text-left px-2 truncate" style="width:${span * dayW}px">${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>`;
+    k += span;
+  }
+  let bg = '';
+  for (let k = 0; k < nDays; k++) {
+    const d = addDays(start, k), we = d.getDay() === 0 || d.getDay() === 6;
+    days += `<div class="g-day text-[10px] text-slate-500 py-1 ${we ? 'g-weekend' : ''}" style="width:${dayW}px">${d.getDate()}</div>`;
+    if (we) bg += `<div class="absolute top-0 bottom-0 g-weekend" style="left:${k * dayW}px;width:${dayW}px"></div>`;
+  }
+  const corteLine = `<div class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-[3]" style="left:${x(corte) + dayW / 2}px" title="Fecha de corte ${fmtDate(corte)}"></div>`;
+
+  const body = rows.map(({ r, i }) => {
+    const st = TAG_STYLE[i.tag];
+    // Tramos por hito cumplido
+    const done = MILESTONES.map(m => ({ m, d: parseDate((r.hitos || {})[m]) })).filter(h => h.d);
+    let segs = '';
+    done.forEach((h, k) => {
+      const next = done[k + 1];
+      let to = next ? next.d : (i.hito === 'Delivered' ? addDays(h.d, 1) : (corte > h.d ? corte : addDays(h.d, 1)));
+      const left = x(h.d), w = Math.max(dayW * 0.35, x(to) - left);
+      segs += `<div class="absolute h-5 top-1/2 -translate-y-1/2 first:rounded-l-md" style="left:${left}px;width:${w}px;background:${MILESTONE_COLORS[h.m]}" title="${h.m}: ${fmtDate(h.d)}${next ? ' → ' + next.m + ': ' + fmtDate(next.d) : ''}"></div>`;
+    });
+    // Tramo pendiente hasta ETA
+    const lastEnd = done.length ? (i.hito === 'Delivered' ? null : (corte > done[done.length - 1].d ? corte : addDays(done[done.length - 1].d, 1))) : (i.etd || null);
+    let plan = '';
+    if (lastEnd && i.eta && i.eta >= lastEnd && i.hito !== 'Delivered') {
+      plan = `<div class="absolute h-5 top-1/2 -translate-y-1/2 rounded-r-md g-plan" style="left:${x(lastEnd)}px;width:${x(addDays(i.eta, 1)) - x(lastEnd)}px" title="Pendiente hasta ETA ${r.eta}"></div>`;
+    }
+    const etdMark = i.etd ? `<div class="absolute text-[10px] text-slate-700 z-[2]" style="left:${x(i.etd) + dayW / 2 - 5}px;bottom:2px" title="ETD ${r.etd}">▲</div>` : '';
+    const etaMark = i.eta ? `<div class="absolute text-sm z-[2]" style="left:${x(i.eta) + dayW / 2 - 2}px;top:2px" title="ETA ${r.eta}">🏁</div>` : '';
+    return `<div class="g-row flex" onclick="location.href='control_oportunidades_crm.html#ro=${encodeURIComponent(r.ro)}'">
+      <div class="g-left shrink-0 px-3 py-2 border-b border-slate-100 ${st.row}" style="width:${LEFT_W}px">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-semibold text-slate-800 text-sm">RO ${r.ro}</span>
+          <span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${st.badge}">${st.label(i)}</span>
+        </div>
+        <div class="text-xs text-slate-500 truncate">${r.consignatario} · ${r.ruta}</div>
+        <div class="flex items-center justify-between text-[11px] mt-0.5">
+          <span class="flex items-center gap-1 text-slate-600"><span class="w-2 h-2 rounded-full" style="background:${MILESTONE_COLORS[i.hito]}"></span>${i.hito}</span>
+          <span class="rounded px-1.5 ${ESTADO_BADGE[r.estado] || 'bg-slate-100 text-slate-600'}">${r.estado}</span>
+        </div>
+      </div>
+      <div class="g-track relative border-b border-slate-100" style="width:${W}px;min-height:64px">${segs}${plan}${etdMark}${etaMark}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('gantt').innerHTML = rows.length ? `
+    <div class="g-wrap" style="width:${LEFT_W + W}px">
+      <div class="g-head flex border-b border-slate-200">
+        <div class="g-left shrink-0 px-3 flex items-end pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500" style="width:${LEFT_W}px">Carga</div>
+        <div style="width:${W}px"><div class="flex">${months}</div><div class="flex">${days}</div></div>
+      </div>
+      <div class="relative">
+        <div class="absolute top-0 bottom-0 pointer-events-none" style="left:${LEFT_W}px;width:${W}px">${bg}${corteLine}</div>
+        ${body}
+      </div>
+    </div>` : '<p class="p-6 text-sm text-slate-400 text-center">No hay cargas con los filtros seleccionados.</p>';
+}
+
+function renderLegend() {
+  document.getElementById('legend').innerHTML = MILESTONES.map(m =>
+    `<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:${MILESTONE_COLORS[m]}"></span>${m}</span>`).join('') +
+    '<span class="flex items-center gap-1.5"><span class="w-5 h-3 rounded-sm g-plan"></span>Pendiente</span>';
+  const sel = document.getElementById('fHito');
+  sel.length = 1;
+  ['Sin booking', ...MILESTONES].forEach(m => sel.insertAdjacentHTML('beforeend', `<option>${m}</option>`));
+}
+
+function showImportFeedback(msg, ok) {
+  const el = document.getElementById('importFeedback');
+  el.textContent = msg;
+  el.className = 'rounded-lg px-4 py-2 text-sm ' + (ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200');
+}
+async function handleExcelImport(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    DATA = await importExcelFile(file);
+    saveData();
+    setDefaultCorte();
+    render();
+    showImportFeedback(`Se importaron ${DATA.length} cargas desde "${file.name}".`, true);
+  } catch (e) {
+    showImportFeedback('No se pudo importar el Excel: ' + e.message, false);
+  }
+  input.value = '';
+}
+
+// Si el CRM cambia los datos en otra pestaña, se actualiza el calendario
+window.addEventListener('storage', e => { if (e.key === STORAGE_KEY) { DATA = loadData(); render(); } });
+['fCorte', 'fVentana', 'fHito', 'fEstado', 'fZoom'].forEach(id => document.getElementById(id).addEventListener('input', render));
+window.addEventListener('resize', () => { const w = window.innerWidth < 640 ? 170 : 260; if (w !== LEFT_W) render(); });
+
+renderLegend();
+setDefaultCorte();
+render();
+// Desplazar el Gantt hasta la fecha de corte
+(() => { const g = document.getElementById('gantt'); const line = g.querySelector('.bg-red-500'); if (line) g.scrollLeft = Math.max(0, LEFT_W + line.offsetLeft - g.clientWidth / 2); })();
+</script>
+</body>
+</html>
