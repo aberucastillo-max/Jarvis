@@ -84,8 +84,13 @@
           <input id="insuranceRate" type="number" min="0" step="0.001" placeholder="Ej. 0.30" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" value="0.30">
         </div>
         <div class="col-span-2">
+          <label class="block text-xs text-slate-500 mb-1">Prima mínima (USD) <span class="text-slate-400">· se guarda</span></label>
+          <input id="insuranceMin" type="number" min="0" step="0.01" placeholder="Ej. 60" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" value="60">
+        </div>
+        <div class="col-span-2">
           <label class="block text-xs text-slate-500 mb-1">Prima estimada (USD)</label>
           <input id="premiumResult" type="text" readonly class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-100 font-semibold" value="$0.00">
+          <p id="minApplied" class="hidden text-[11px] text-amber-700 mt-1">Se aplicó la prima mínima.</p>
         </div>
         <button type="button" onclick="saveCalculatedInsurance()" class="col-span-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-2 text-sm font-medium">Agregar monto USD</button>
       </div>
@@ -490,14 +495,32 @@ function openInsuranceCalculator(ro) {
   document.getElementById('insuredValue').value = '';
   document.getElementById('insuranceRate').value = '0.30';
   document.getElementById('premiumResult').value = '$0.00';
+  document.getElementById('minApplied').classList.add('hidden');
   document.getElementById('insuranceFeedback').textContent = '';
   document.getElementById('insuranceCalculator').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// Prima mínima editable, guardada en el navegador (localStorage)
+const MIN_KEY = 'crm_prima_minima_usd';
+const DEFAULT_MIN = 60;
+function loadMinPremium() {
+  let v = DEFAULT_MIN;
+  try { const s = localStorage.getItem(MIN_KEY); if (s !== null && !isNaN(Number(s))) v = Number(s); } catch (e) {}
+  document.getElementById('insuranceMin').value = v;
+}
+function saveMinPremium() {
+  const v = Number(document.getElementById('insuranceMin').value);
+  if (isNaN(v) || v < 0) return;
+  try { localStorage.setItem(MIN_KEY, String(v)); } catch (e) {}
 }
 
 function calculatePremium() {
   const value = Number(document.getElementById('insuredValue').value) || 0;
   const rate = Number(document.getElementById('insuranceRate').value) || 0;
-  const premium = value * rate / 100;
+  const minimum = Number(document.getElementById('insuranceMin').value) || 0;
+  const base = value * rate / 100;
+  const premium = value > 0 ? Math.max(base, minimum) : 0;
+  document.getElementById('minApplied').classList.toggle('hidden', !(value > 0 && minimum > base));
   document.getElementById('premiumResult').value = '$' + premium.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
   return premium;
 }
@@ -532,7 +555,9 @@ function closeInsuranceCalculator() {
 }
 
 document.addEventListener('input', event => {
-  if (event.target && (event.target.id === 'insuredValue' || event.target.id === 'insuranceRate')) calculatePremium();
+  if (!event.target) return;
+  if (event.target.id === 'insuranceMin') saveMinPremium();
+  if (['insuredValue','insuranceRate','insuranceMin'].includes(event.target.id)) calculatePremium();
 });
 
 // ============ CSV ============
@@ -548,6 +573,7 @@ function exportCSV() {
 }
 
 // ============ INIT ============
+loadMinPremium();
 fillSelects();
 ['fSearch','fRuta','fNaviera','fBroker','fServicio','fEstado'].forEach(id =>
   document.getElementById(id).addEventListener('input', applyFilters)
