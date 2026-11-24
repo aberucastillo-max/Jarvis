@@ -9,8 +9,15 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 object FileOps {
 
@@ -163,6 +170,63 @@ object FileOps {
         if (name.any { it in "/\\:*?\"<>|" } || name == "." || name == "..") {
             throw IOException("Un nombre no puede contener: \\ / : * ? \" < > |")
         }
+    }
+
+    private fun uniqueFile(dir: File, base: String, ext: String): File {
+        var f = File(dir, "$base$ext")
+        var n = 2
+        while (f.exists()) {
+            f = File(dir, "$base ($n)$ext")
+            n++
+        }
+        return f
+    }
+
+    /** Comprime archivos y carpetas en un .zip dentro de [dir]. */
+    fun zip(sources: List<File>, dir: File, baseName: String): File {
+        val target = uniqueFile(dir, baseName, ".zip")
+        try {
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(target))).use { zos ->
+                fun add(f: File, entryName: String) {
+                    if (f.isDirectory) {
+                        zos.putNextEntry(ZipEntry("$entryName/"))
+                        zos.closeEntry()
+                        f.listFiles()?.forEach { add(it, "$entryName/${it.name}") }
+                    } else {
+                        zos.putNextEntry(ZipEntry(entryName).apply { time = f.lastModified() })
+                        f.inputStream().use { it.copyTo(zos) }
+                        zos.closeEntry()
+                    }
+                }
+                sources.forEach { add(it, it.name) }
+            }
+        } catch (e: Exception) {
+            target.delete()
+            throw e
+        }
+        return target
+    }
+
+    /** Extrae un .zip en una carpeta nueva con su nombre, junto al archivo. */
+    fun unzip(zip: File, dir: File): File {
+        val out = uniqueFile(dir, zip.nameWithoutExtension, "")
+        if (!out.mkdirs()) throw IOException("No se pudo crear la carpeta destino.")
+        val root = out.canonicalPath + File.separator
+        ZipInputStream(BufferedInputStream(FileInputStream(zip))).use { zis ->
+            while (true) {
+                val e = zis.nextEntry ?: break
+                val f = File(out, e.name)
+                if (!f.canonicalPath.startsWith(root)) throw IOException("Entrada no válida en el ZIP: ${e.name}")
+                if (e.isDirectory) f.mkdirs()
+                else {
+                    f.parentFile?.mkdirs()
+                    FileOutputStream(f).use { zis.copyTo(it) }
+                    if (e.time > 0) f.setLastModified(e.time)
+                }
+                zis.closeEntry()
+            }
+        }
+        return out
     }
 
     fun storageRoots(ctx: Context): List<StorageRoot> {

@@ -74,7 +74,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
-fun PreviewPane(vm: ExplorerViewModel, modifier: Modifier) {
+fun PreviewPane(vm: ExplorerTab, modifier: Modifier) {
     Box(modifier.background(MaterialTheme.colorScheme.surfaceContainer)) {
         val selected = remember(vm.selection, vm.currentItems) { vm.selectedItems() }
         val item = vm.focused
@@ -113,7 +113,7 @@ private fun MultiSummary(items: List<FileItem>) {
 }
 
 @Composable
-private fun ItemPreview(item: FileItem, vm: ExplorerViewModel) {
+private fun ItemPreview(item: FileItem, vm: ExplorerTab) {
     Column(Modifier.fillMaxSize()) {
         Box(
             Modifier.fillMaxWidth().weight(1f).padding(10.dp),
@@ -127,7 +127,7 @@ private fun ItemPreview(item: FileItem, vm: ExplorerViewModel) {
 }
 
 @Composable
-private fun PreviewContent(item: FileItem, vm: ExplorerViewModel) {
+private fun PreviewContent(item: FileItem, vm: ExplorerTab) {
     val file = File(item.path)
     when {
         item.category == Category.IMAGE -> ZoomableImage(file, item.lastModified)
@@ -252,7 +252,7 @@ private fun TextPreview(file: File) {
 }
 
 @Composable
-private fun Properties(item: FileItem, vm: ExplorerViewModel) {
+private fun Properties(item: FileItem, vm: ExplorerTab) {
     val extras by produceState<List<Pair<String, String>>>(emptyList(), item.path, item.lastModified) {
         value = withContext(Dispatchers.IO) { Meta.extras(item) }
     }
@@ -293,6 +293,7 @@ private fun Properties(item: FileItem, vm: ExplorerViewModel) {
                 Text("Abrir")
             }
             if (!item.isDir) {
+                TextButton(onClick = { vm.openWith(item) }) { Text("Abrir con…") }
                 TextButton(onClick = { vm.share(listOf(item)) }) {
                     Icon(Icons.Filled.Share, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))

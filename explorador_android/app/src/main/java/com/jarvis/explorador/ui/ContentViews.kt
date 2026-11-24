@@ -43,6 +43,13 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Tab
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
@@ -95,7 +102,7 @@ import java.io.File
 
 /** Estado compartido por todas las vistas para el menú contextual. */
 private class ItemCallbacks(
-    val vm: ExplorerViewModel,
+    val vm: ExplorerTab,
     val menuFor: String?,
     val setMenu: (String?) -> Unit,
     val dialog: (DialogReq) -> Unit,
@@ -103,7 +110,7 @@ private class ItemCallbacks(
 )
 
 @Composable
-fun ContentArea(vm: ExplorerViewModel, dialog: (DialogReq) -> Unit, onInteract: () -> Unit) {
+fun ContentArea(vm: ExplorerTab, dialog: (DialogReq) -> Unit, onInteract: () -> Unit) {
     var menuFor by remember { mutableStateOf<String?>(null) }
     val cb = ItemCallbacks(vm, menuFor, { menuFor = it }, dialog, onInteract)
 
@@ -153,13 +160,13 @@ private fun Modifier.itemGestures(item: FileItem, cb: ItemCallbacks): Modifier {
 }
 
 @Composable
-private fun rowBackground(item: FileItem, vm: ExplorerViewModel): Color = when {
+private fun rowBackground(item: FileItem, vm: ExplorerTab): Color = when {
     item.path in vm.selection && vm.focused?.path == item.path -> focusBg
     item.path in vm.selection -> selectionBg
     else -> Color.Transparent
 }
 
-private fun itemAlpha(item: FileItem, vm: ExplorerViewModel): Float = when {
+private fun itemAlpha(item: FileItem, vm: ExplorerTab): Float = when {
     vm.clipCut && item.path in vm.clipboard -> 0.45f
     item.hidden -> 0.6f
     else -> 1f
@@ -216,7 +223,7 @@ private fun DetailsView(cb: ItemCallbacks) {
 }
 
 @Composable
-private fun DetailsHeader(vm: ExplorerViewModel) {
+private fun DetailsHeader(vm: ExplorerTab) {
     val inSearch = vm.searchResults != null
     Row(
         Modifier.fillMaxWidth().height(32.dp).background(MaterialTheme.colorScheme.surface).padding(start = 8.dp),
@@ -244,7 +251,7 @@ private fun DetailsHeader(vm: ExplorerViewModel) {
 
 @Composable
 private fun HeaderCell(
-    vm: ExplorerViewModel,
+    vm: ExplorerTab,
     field: SortField,
     modifier: Modifier,
     resizable: Boolean = true,
@@ -538,18 +545,37 @@ private fun ItemContextMenu(item: FileItem, cb: ItemCallbacks) {
         }
         if (!item.isDir) MenuEntry(Icons.AutoMirrored.Filled.OpenInNew, "Abrir con…") { close(); vm.openWith(item) }
         HorizontalDivider()
+        if (vm.searchResults != null) {
+            HorizontalDivider()
+            MenuEntry(Icons.Filled.FolderOpen, "Abrir ubicación del archivo") { close(); vm.openLocation(item) }
+            MenuEntry(Icons.Filled.Tab, "Abrir ubicación en nueva pestaña") {
+                close(); vm.openInNewTab(File(item.parent), item.path)
+            }
+            MenuEntry(Icons.Filled.VerticalSplit, "Abrir ubicación en el otro panel") {
+                close(); vm.openInOtherPane(File(item.parent), item.path)
+            }
+            MenuEntry(Icons.Filled.OpenInBrowser, "Abrir ubicación en nueva ventana") {
+                close(); vm.openInNewWindow(File(item.parent))
+            }
+        }
+        if (item.isDir) {
+            HorizontalDivider()
+            MenuEntry(Icons.Filled.Tab, "Abrir en nueva pestaña") { close(); vm.openInNewTab(File(item.path)) }
+            MenuEntry(Icons.Filled.VerticalSplit, "Abrir en el otro panel") { close(); vm.openInOtherPane(File(item.path)) }
+            MenuEntry(Icons.Filled.OpenInBrowser, "Abrir en nueva ventana") { close(); vm.openInNewWindow(File(item.path)) }
+        }
+        HorizontalDivider()
         MenuEntry(Icons.Filled.ContentCut, "Cortar") { close(); vm.copySelection(true) }
         MenuEntry(Icons.Filled.ContentCopy, "Copiar") { close(); vm.copySelection(false) }
-        MenuEntry(Icons.Filled.Share, "Compartir") { close(); vm.share(vm.selectedItems()) }
+        MenuEntry(Icons.Filled.DriveFileMove, "Mover a…") { close(); cb.dialog(DialogReq.PickFolder(vm.selectedItems(), move = true)) }
+        MenuEntry(Icons.Filled.FileCopy, "Copiar a…") { close(); cb.dialog(DialogReq.PickFolder(vm.selectedItems(), move = false)) }
         MenuEntry(Icons.Filled.DriveFileRenameOutline, "Cambiar nombre") { close(); cb.dialog(DialogReq.Rename(item)) }
         MenuEntry(Icons.Filled.Delete, "Eliminar") { close(); cb.dialog(DialogReq.Delete(vm.selectedItems())) }
         HorizontalDivider()
+        MenuEntry(Icons.Filled.Share, "Compartir") { close(); vm.share(vm.selectedItems()) }
+        MenuEntry(Icons.Filled.FolderZip, "Comprimir en ZIP") { close(); vm.compress(vm.selectedItems()) }
+        if (item.extension == "zip") MenuEntry(Icons.Filled.Unarchive, "Extraer todo") { close(); vm.extract(item) }
         if (item.isDir) MenuEntry(Icons.Filled.PushPin, "Anclar a Acceso rápido") { close(); vm.pin(item.path) }
-        if (vm.searchResults != null) {
-            MenuEntry(Icons.Filled.FolderOpen, "Abrir ubicación del archivo") {
-                close(); vm.navigate(File(item.parent))
-            }
-        }
         MenuEntry(Icons.Filled.Link, "Copiar ruta") { close(); clipboard.setText(AnnotatedString(item.path)) }
         MenuEntry(Icons.Filled.SelectAll, if (vm.selectionMode) "Salir de selección múltiple" else "Selección múltiple") {
             close(); vm.setSelectionModeOn(!vm.selectionMode)

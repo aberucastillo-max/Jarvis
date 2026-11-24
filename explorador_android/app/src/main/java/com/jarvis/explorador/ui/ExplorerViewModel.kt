@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.explorador.MainActivity
 import com.jarvis.explorador.data.Density
 import com.jarvis.explorador.data.FileItem
 import com.jarvis.explorador.data.FileOps
@@ -30,42 +31,48 @@ import com.jarvis.explorador.data.SortField
 import com.jarvis.explorador.data.Sorting
 import com.jarvis.explorador.data.StorageRoot
 import com.jarvis.explorador.data.ViewMode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
-    private val prefs: SharedPreferences = app.getSharedPreferences("explorador", Context.MODE_PRIVATE)
+enum class PaneLayout(val label: String) {
+    SINGLE("Un panel"), SIDE_BY_SIDE("Dos paneles en paralelo"), STACKED("Dos paneles apilados")
+}
+
+/**
+ * Estado compartido por todas las pestañas y paneles de una ventana:
+ * ajustes de vista, portapapeles, ubicaciones, árbol de carpetas y mensajes.
+ */
+class Shared(val app: Application, val scope: CoroutineScope) {
+    val prefs: SharedPreferences = app.getSharedPreferences("explorador", Context.MODE_PRIVATE)
 
     private inline fun <reified T : Enum<T>> enumPref(key: String, def: T): T =
         prefs.getString(key, null)?.let { v -> enumValues<T>().firstOrNull { it.name == v } } ?: def
 
-    private fun save(block: SharedPreferences.Editor.() -> Unit) = prefs.edit().apply(block).apply()
+    fun save(block: SharedPreferences.Editor.() -> Unit) = prefs.edit().apply(block).apply()
 
-    // ---------- Ubicaciones ----------
+    // Enlaces con el ViewModel (pestañas, paneles, ventanas)
+    var onViewChanged: () -> Unit = {}
+    var onFsChanged: () -> Unit = {}
+    var onSessionChanged: () -> Unit = {}
+    var openInNewTab: (File, String?) -> Unit = { _, _ -> }
+    var openInOtherPane: (File, String?) -> Unit = { _, _ -> }
+    var otherPaneDir: () -> File? = { null }
+
     var roots: List<StorageRoot> = emptyList(); private set
     var quickAccess: List<QuickPlace> = emptyList(); private set
     var pins by mutableStateOf(prefs.getString("pins", "")!!.split('\n').filter { it.isNotBlank() }); private set
-
-    // ---------- Contenido ----------
-    var currentDir by mutableStateOf<File?>(null); private set
-    private var rawItems: List<FileItem> = emptyList()
-    var currentItems by mutableStateOf<List<FileItem>>(emptyList()); private set
-    var groups by mutableStateOf<List<ItemGroup>>(emptyList()); private set
-    var visibleItems by mutableStateOf<List<FileItem>>(emptyList()); private set
-    var loading by mutableStateOf(false); private set
-    var error by mutableStateOf<String?>(null); private set
-    var busy by mutableStateOf<String?>(null); private set
     var message by mutableStateOf<String?>(null)
+    var busy by mutableStateOf<String?>(null); private set
+    var freeSpaceTick by mutableIntStateOf(0); private set
 
-    // ---------- Selección ----------
-    var selection by mutableStateOf<Set<String>>(emptySet()); private set
-    var focused by mutableStateOf<FileItem?>(null); private set
-    var selectionMode by mutableStateOf(false); private set
+    var clipboard by mutableStateOf<List<String>>(emptyList())
+    var clipCut by mutableStateOf(false)
 
-    // ---------- Vista ----------
+    // Vista
     var sortField by mutableStateOf(enumPref("sortField", SortField.NAME)); private set
     var sortAsc by mutableStateOf(prefs.getBoolean("sortAsc", true)); private set
     var groupBy by mutableStateOf(enumPref("groupBy", GroupBy.NONE)); private set
@@ -84,54 +91,209 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
     var showColDate by mutableStateOf(prefs.getBoolean("showColDate", true)); private set
     var showColType by mutableStateOf(prefs.getBoolean("showColType", true)); private set
     var showColSize by mutableStateOf(prefs.getBoolean("showColSize", true)); private set
-    var collapsed by mutableStateOf<Set<String>>(emptySet()); private set
 
-    // ---------- Búsqueda ----------
+    // Árbol de carpetas
+    var treeExpanded by mutableStateOf<Set<String>>(emptySet()); private set
+    val treeChildren = mutableStateMapOf<String, List<String>>()
+
+    fun init() {
+        if (roots.isNotEmpty()) return
+        roots = FileOps.storageRoots(app)
+        quickAccess = FileOps.quickAccess()
+    }
+
+    fun sortBy(field: SortField) {
+        if (sortField == field) sortAsc = !sortAsc
+        else {
+            sortField = field
+            sortAsc = field == SortField.NAME || field == SortField.TYPE || field == SortField.LOCATION
+        }
+        save { putString("sortField", sortField.name); putBoolean("sortAsc", sortAsc) }
+        onViewChanged()
+    }
+
+    fun resetSortIfLocation() {
+        if (sortField == SortField.LOCATION) sortField = SortField.NAME
+    }
+
+    fun setSortDirection(asc: Boolean) { sortAsc = asc; save { putBoolean("sortAsc", asc) }; onViewChanged() }
+    fun setGrouping(g: GroupBy) { groupBy = g; save { putString("groupBy", g.name) }; onViewChanged() }
+    fun setView(mode: ViewMode) { viewMode = mode; save { putString("viewMode", mode.name) } }
+    fun setRowDensity(d: Density) { density = d; save { putString("density", d.name) } }
+    fun toggleHidden() {
+        showHidden = !showHidden
+        save { putBoolean("showHidden", showHidden) }
+        onFsChanged()
+    }
+    fun toggleNav() { showNav = !showNav; save { putBoolean("showNav", showNav) } }
+    fun togglePreview() { showPreview = !showPreview; save { putBoolean("showPreview", showPreview) } }
+    fun ensurePreview() { if (!showPreview) togglePreview() }
+    fun toggleTapMode() { tapOpensFolders = !tapOpensFolders; save { putBoolean("tapOpensFolders", tapOpensFolders) } }
+    fun dragNav(d: Float) { navWidth = (navWidth + d).coerceIn(160f, 480f); save { putFloat("navWidth", navWidth) } }
+    fun dragPreview(d: Float) { previewWidth = (previewWidth + d).coerceIn(220f, 800f); save { putFloat("previewWidth", previewWidth) } }
+
+    fun resizeColumn(field: SortField, d: Float) {
+        when (field) {
+            SortField.DATE -> colDate = (colDate + d).coerceIn(60f, 400f)
+            SortField.TYPE -> colType = (colType + d).coerceIn(60f, 400f)
+            SortField.SIZE -> colSize = (colSize + d).coerceIn(50f, 300f)
+            SortField.LOCATION -> colLocation = (colLocation + d).coerceIn(80f, 600f)
+            SortField.NAME -> Unit
+        }
+        save {
+            putFloat("colDate", colDate); putFloat("colType", colType)
+            putFloat("colSize", colSize); putFloat("colLocation", colLocation)
+        }
+    }
+
+    fun toggleColumn(field: SortField) {
+        when (field) {
+            SortField.DATE -> showColDate = !showColDate
+            SortField.TYPE -> showColType = !showColType
+            SortField.SIZE -> showColSize = !showColSize
+            else -> Unit
+        }
+        save { putBoolean("showColDate", showColDate); putBoolean("showColType", showColType); putBoolean("showColSize", showColSize) }
+    }
+
+    fun pin(path: String) {
+        if (path in pins) return
+        pins = pins + path
+        save { putString("pins", pins.joinToString("\n")) }
+        message = "Anclado a Acceso rápido"
+    }
+
+    fun unpin(path: String) {
+        pins = pins - path
+        save { putString("pins", pins.joinToString("\n")) }
+    }
+
+    fun toggleTree(path: String) {
+        if (path in treeExpanded) treeExpanded = treeExpanded - path
+        else {
+            treeExpanded = treeExpanded + path
+            loadTreeChildren(path)
+        }
+    }
+
+    fun reloadTree() {
+        treeExpanded.forEach { loadTreeChildren(it) }
+        freeSpaceTick++
+    }
+
+    private fun loadTreeChildren(path: String) {
+        scope.launch {
+            val kids = withContext(Dispatchers.IO) {
+                File(path).listFiles()
+                    ?.filter { it.isDirectory && (showHidden || !it.isHidden) }
+                    ?.map { it.path }
+                    ?.sortedWith(compareBy(NaturalOrder) { File(it).name })
+                    ?: emptyList()
+            }
+            treeChildren[path] = kids
+        }
+    }
+
+    /** Ejecuta una operación de archivos en segundo plano y refresca todas las pestañas. */
+    fun runOp(label: String, block: suspend () -> String) {
+        scope.launch {
+            busy = label
+            val r = withContext(Dispatchers.IO) { runCatching { block() } }
+            busy = null
+            message = r.getOrElse { "Error: ${it.message}" }
+            onFsChanged()
+        }
+    }
+
+    fun openInNewWindow(dir: File) {
+        try {
+            val i = Intent(app, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_PATH, dir.path)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
+                        Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+                )
+            app.startActivity(i)
+        } catch (e: Exception) {
+            message = "No se pudo abrir otra ventana: ${e.message}"
+        }
+    }
+}
+
+private var tabCounter = 0
+
+/** Una pestaña del explorador: carpeta, historial, contenido, selección y búsqueda. */
+class ExplorerTab(val s: Shared) {
+    val id = ++tabCounter
+    private val scope get() = s.scope
+
+    // ---- Delegados a los ajustes compartidos (los usa la interfaz) ----
+    val roots get() = s.roots
+    val quickAccess get() = s.quickAccess
+    val pins get() = s.pins
+    val clipboard get() = s.clipboard
+    val clipCut get() = s.clipCut
+    val busy get() = s.busy
+    val freeSpaceTick get() = s.freeSpaceTick
+    val treeExpanded get() = s.treeExpanded
+    val treeChildren get() = s.treeChildren
+    val sortField get() = s.sortField
+    val sortAsc get() = s.sortAsc
+    val groupBy get() = s.groupBy
+    val viewMode get() = s.viewMode
+    val density get() = s.density
+    val showHidden get() = s.showHidden
+    val tapOpensFolders get() = s.tapOpensFolders
+    val colDate get() = s.colDate
+    val colType get() = s.colType
+    val colSize get() = s.colSize
+    val colLocation get() = s.colLocation
+    val showColDate get() = s.showColDate
+    val showColType get() = s.showColType
+    val showColSize get() = s.showColSize
+    fun sortBy(f: SortField) = s.sortBy(f)
+    fun resizeColumn(f: SortField, d: Float) = s.resizeColumn(f, d)
+    fun pin(path: String) = s.pin(path)
+    fun unpin(path: String) = s.unpin(path)
+    fun toggleTree(path: String) = s.toggleTree(path)
+
+    // ---- Estado propio ----
+    var currentDir by mutableStateOf<File?>(null); private set
+    private var rawItems: List<FileItem> = emptyList()
+    var currentItems by mutableStateOf<List<FileItem>>(emptyList()); private set
+    var groups by mutableStateOf<List<ItemGroup>>(emptyList()); private set
+    var visibleItems by mutableStateOf<List<FileItem>>(emptyList()); private set
+    var loading by mutableStateOf(false); private set
+    var error by mutableStateOf<String?>(null); private set
+    var selection by mutableStateOf<Set<String>>(emptySet()); private set
+    var focused by mutableStateOf<FileItem?>(null); private set
+    var selectionMode by mutableStateOf(false); private set
+    var collapsed by mutableStateOf<Set<String>>(emptySet()); private set
     var filter by mutableStateOf(""); private set
     var searchResults by mutableStateOf<List<FileItem>?>(null); private set
     var searching by mutableStateOf(false); private set
     private var searchJob: Job? = null
+    private var loadJob: Job? = null
+    private var pendingSelect: String? = null
 
-    // ---------- Portapapeles ----------
-    var clipboard by mutableStateOf<List<String>>(emptyList()); private set
-    var clipCut by mutableStateOf(false); private set
-
-    // ---------- Historial ----------
     private val backStack = mutableStateListOf<String>()
     private val fwdStack = mutableStateListOf<String>()
     val canBack get() = backStack.isNotEmpty()
     val canForward get() = fwdStack.isNotEmpty()
     val canUp get() = currentDir?.let { d -> roots.none { it.path == d.path } && d.parentFile?.canRead() == true } ?: false
 
-    // ---------- Árbol de carpetas ----------
-    var treeExpanded by mutableStateOf<Set<String>>(emptySet()); private set
-    val treeChildren = mutableStateMapOf<String, List<String>>()
-
-    var freeSpaceTick by mutableIntStateOf(0); private set
-
-    private var loadJob: Job? = null
-
-    fun start() {
-        if (currentDir != null) return
-        roots = FileOps.storageRoots(getApplication())
-        quickAccess = FileOps.quickAccess()
-        val last = prefs.getString("lastDir", null)?.let { File(it) }
-        val initial = if (last != null && last.isDirectory && last.canRead()) last else File(roots.first().path)
-        navigate(initial, record = false)
-    }
-
-    fun refreshIfStarted() {
-        if (currentDir != null) {
-            load()
-            treeExpanded.forEach { loadTreeChildren(it) }
+    val title: String
+        get() {
+            if (searchResults != null) return "Búsqueda: $filter"
+            val d = currentDir ?: return "…"
+            return roots.firstOrNull { it.path == d.path }?.label ?: d.name.ifEmpty { "/" }
         }
-    }
 
     // ================= Navegación =================
 
-    fun navigate(dir: File, record: Boolean = true) {
+    fun navigate(dir: File, record: Boolean = true, select: String? = null) {
         if (!dir.isDirectory) {
-            message = "No se encuentra la carpeta «${dir.path}»"
+            s.message = "No se encuentra la carpeta «${dir.path}»"
             return
         }
         val cur = currentDir
@@ -145,8 +307,10 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         selection = emptySet()
         focused = null
         selectionMode = false
+        pendingSelect = select
         currentDir = dir
-        save { putString("lastDir", dir.path) }
+        s.save { putString("lastDir", dir.path) }
+        s.onSessionChanged()
         load()
     }
 
@@ -163,18 +327,23 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun goUp() {
-        if (canUp) currentDir?.parentFile?.let { navigate(it) }
+        if (canUp) currentDir?.parentFile?.let { navigate(it, select = currentDir?.path) }
     }
 
     fun refresh() {
         load()
-        freeSpaceTick++
+        s.reloadTree()
+    }
+
+    /** Recarga silenciosa tras una operación (sin perder selección ni búsqueda). */
+    fun reload() {
+        if (searchResults == null) load()
     }
 
     private fun load() {
         val dir = currentDir ?: return
         loadJob?.cancel()
-        loadJob = viewModelScope.launch {
+        loadJob = scope.launch {
             loading = true
             error = null
             val res = withContext(Dispatchers.IO) { runCatching { FileOps.list(dir, showHidden) } }
@@ -184,6 +353,10 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
                 error = it.message ?: "Error al leer la carpeta"
             }
             recompute()
+            pendingSelect?.let { p ->
+                pendingSelect = null
+                currentItems.firstOrNull { it.path == p }?.let { selectOnly(it) }
+            }
         }
     }
 
@@ -209,19 +382,26 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         return out
     }
 
-    /** Ruta escrita a mano en la barra de direcciones. */
     fun navigateToTyped(text: String) {
         val t = text.trim()
         if (t.isEmpty()) return
         val f = File(t)
         if (f.isDirectory) navigate(f)
-        else if (f.isFile) f.parentFile?.let { navigate(it) }
-        else message = "No se encuentra «$t». Compruebe la ruta."
+        else if (f.isFile) f.parentFile?.let { navigate(it, select = f.path) }
+        else s.message = "No se encuentra «$t». Compruebe la ruta."
     }
+
+    // ---- Abrir en otros sitios ----
+    fun openInNewTab(dir: File, select: String? = null) = s.openInNewTab(dir, select)
+    fun openInOtherPane(dir: File, select: String? = null) = s.openInOtherPane(dir, select)
+    fun openInNewWindow(dir: File) = s.openInNewWindow(dir)
+
+    /** "Abrir ubicación del archivo" (desde resultados de búsqueda). */
+    fun openLocation(item: FileItem) = navigate(File(item.parent), select = item.path)
 
     // ================= Lista derivada =================
 
-    private fun recompute() {
+    fun recompute() {
         val source = searchResults ?: rawItems
         val q = filter.trim()
         val filtered = if (q.isEmpty() || searchResults != null) source
@@ -238,116 +418,13 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         else if (f != null) focused = sorted.firstOrNull { it.path == f.path } ?: f
     }
 
-    // ================= Ajustes de vista =================
-
-    fun sortBy(field: SortField) {
-        if (sortField == field) sortAsc = !sortAsc
-        else {
-            sortField = field
-            sortAsc = field == SortField.NAME || field == SortField.TYPE || field == SortField.LOCATION
-        }
-        save { putString("sortField", sortField.name); putBoolean("sortAsc", sortAsc) }
-        recompute()
-    }
-
-    fun setSortDirection(asc: Boolean) {
-        sortAsc = asc
-        save { putBoolean("sortAsc", asc) }
-        recompute()
-    }
-
-    fun setGrouping(g: GroupBy) {
-        groupBy = g
-        collapsed = emptySet()
-        save { putString("groupBy", g.name) }
-        recompute()
-    }
-
     fun toggleGroup(key: String) {
         collapsed = if (key in collapsed) collapsed - key else collapsed + key
         recompute()
     }
 
-    fun collapseAll() {
-        collapsed = groups.mapTo(HashSet()) { it.key }
-        recompute()
-    }
-
-    fun expandAll() {
-        collapsed = emptySet()
-        recompute()
-    }
-
-    fun setView(mode: ViewMode) {
-        viewMode = mode
-        save { putString("viewMode", mode.name) }
-    }
-
-    fun setRowDensity(d: Density) {
-        density = d
-        save { putString("density", d.name) }
-    }
-
-    fun toggleHidden() {
-        showHidden = !showHidden
-        save { putBoolean("showHidden", showHidden) }
-        load()
-        treeExpanded.forEach { loadTreeChildren(it) }
-    }
-
-    fun toggleNav() {
-        showNav = !showNav
-        save { putBoolean("showNav", showNav) }
-    }
-
-    fun togglePreview() {
-        showPreview = !showPreview
-        save { putBoolean("showPreview", showPreview) }
-    }
-
-    fun showPreviewFor(item: FileItem) {
-        if (!showPreview) togglePreview()
-        focused = item
-    }
-
-    fun toggleTapMode() {
-        tapOpensFolders = !tapOpensFolders
-        save { putBoolean("tapOpensFolders", tapOpensFolders) }
-    }
-
-    fun dragNav(deltaDp: Float) {
-        navWidth = (navWidth + deltaDp).coerceIn(160f, 480f)
-        save { putFloat("navWidth", navWidth) }
-    }
-
-    fun dragPreview(deltaDp: Float) {
-        previewWidth = (previewWidth + deltaDp).coerceIn(220f, 800f)
-        save { putFloat("previewWidth", previewWidth) }
-    }
-
-    fun resizeColumn(field: SortField, deltaDp: Float) {
-        when (field) {
-            SortField.DATE -> colDate = (colDate + deltaDp).coerceIn(60f, 400f)
-            SortField.TYPE -> colType = (colType + deltaDp).coerceIn(60f, 400f)
-            SortField.SIZE -> colSize = (colSize + deltaDp).coerceIn(50f, 300f)
-            SortField.LOCATION -> colLocation = (colLocation + deltaDp).coerceIn(80f, 600f)
-            SortField.NAME -> Unit
-        }
-        save {
-            putFloat("colDate", colDate); putFloat("colType", colType)
-            putFloat("colSize", colSize); putFloat("colLocation", colLocation)
-        }
-    }
-
-    fun toggleColumn(field: SortField) {
-        when (field) {
-            SortField.DATE -> showColDate = !showColDate
-            SortField.TYPE -> showColType = !showColType
-            SortField.SIZE -> showColSize = !showColSize
-            else -> Unit
-        }
-        save { putBoolean("showColDate", showColDate); putBoolean("showColType", showColType); putBoolean("showColSize", showColSize) }
-    }
+    fun collapseAll() { collapsed = groups.mapTo(HashSet()) { it.key }; recompute() }
+    fun expandAll() { collapsed = emptySet(); recompute() }
 
     // ================= Búsqueda =================
 
@@ -367,7 +444,8 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         selection = emptySet()
         focused = null
         recompute()
-        searchJob = viewModelScope.launch {
+        s.onSessionChanged()
+        searchJob = scope.launch {
             try {
                 FileOps.search(dir, q, showHidden).collect { batch ->
                     searchResults = (searchResults ?: emptyList()) + batch
@@ -385,7 +463,7 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         searching = false
         if (searchResults != null) {
             searchResults = null
-            if (sortField == SortField.LOCATION) sortField = SortField.NAME
+            s.resetSortIfLocation()
             recompute()
         }
     }
@@ -394,28 +472,16 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectedItems(): List<FileItem> = currentItems.filter { it.path in selection }
 
-    fun selectOnly(item: FileItem) {
-        selection = setOf(item.path)
-        focused = item
-    }
+    fun selectOnly(item: FileItem) { selection = setOf(item.path); focused = item }
 
     fun toggle(item: FileItem) {
         selection = if (item.path in selection) selection - item.path else selection + item.path
         focused = item
     }
 
-    fun selectAll() {
-        selection = visibleItems.mapTo(HashSet()) { it.path }
-    }
-
-    fun clearSelection() {
-        selection = emptySet()
-        focused = null
-    }
-
-    fun invertSelection() {
-        selection = visibleItems.map { it.path }.filterTo(HashSet()) { it !in selection }
-    }
+    fun selectAll() { selection = visibleItems.mapTo(HashSet()) { it.path } }
+    fun clearSelection() { selection = emptySet(); focused = null }
+    fun invertSelection() { selection = visibleItems.map { it.path }.filterTo(HashSet()) { it !in selection } }
 
     fun setSelectionModeOn(on: Boolean) {
         selectionMode = on
@@ -430,16 +496,12 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun onDoubleTap(item: FileItem) {
-        if (selectionMode) toggle(item) else open(item)
-    }
+    fun onDoubleTap(item: FileItem) { if (selectionMode) toggle(item) else open(item) }
 
     fun onLongPress(item: FileItem) {
         if (item.path !in selection) {
             if (selectionMode) toggle(item) else selectOnly(item)
-        } else {
-            focused = item
-        }
+        } else focused = item
     }
 
     fun moveFocus(delta: Int, extend: Boolean) {
@@ -447,18 +509,15 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         if (list.isEmpty()) return
         val idx = focused?.let { f -> list.indexOfFirst { it.path == f.path } } ?: -1
         val next = list[(if (idx < 0) 0 else idx + delta).coerceIn(0, list.lastIndex)]
-        if (extend) {
-            selection = selection + next.path
-            focused = next
-        } else selectOnly(next)
+        if (extend) { selection = selection + next.path; focused = next } else selectOnly(next)
     }
+
+    fun showPreviewFor(item: FileItem) { s.ensurePreview(); focused = item }
 
     // ================= Abrir / compartir =================
 
-    private fun uriFor(path: String): Uri {
-        val ctx = getApplication<Application>()
-        return FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
-    }
+    private fun uriFor(path: String): Uri =
+        FileProvider.getUriForFile(s.app, s.app.packageName + ".files", File(path))
 
     fun open(item: FileItem) {
         if (item.isDir) navigate(File(item.path)) else launchView(item, chooser = false)
@@ -467,25 +526,24 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
     fun openWith(item: FileItem) = launchView(item, chooser = true)
 
     private fun launchView(item: FileItem, chooser: Boolean) {
-        val ctx = getApplication<Application>()
         try {
             val view = Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uriFor(item.path), FileTypes.mime(item.extension))
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             val intent = if (chooser) Intent.createChooser(view, "Abrir «${item.name}» con") else view
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            ctx.startActivity(intent)
+            s.app.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
-            message = "No hay ninguna aplicación instalada para abrir «${item.name}»"
+            s.message = "No hay ninguna aplicación instalada para abrir «${item.name}»"
         } catch (e: Exception) {
-            message = "No se pudo abrir: ${e.message}"
+            s.message = "No se pudo abrir: ${e.message}"
         }
     }
 
     fun share(items: List<FileItem>) {
         val files = items.filter { !it.isDir }
         if (files.isEmpty()) {
-            message = "Selecciona archivos (no carpetas) para compartir"
+            s.message = "Selecciona archivos (no carpetas) para compartir"
             return
         }
         try {
@@ -497,116 +555,274 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
             }
             intent.clipData = ClipData.newRawUri("", uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            val chooser = Intent.createChooser(intent, "Compartir").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            getApplication<Application>().startActivity(chooser)
+            s.app.startActivity(Intent.createChooser(intent, "Compartir").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
-            message = "No se pudo compartir: ${e.message}"
+            s.message = "No se pudo compartir: ${e.message}"
         }
     }
 
     // ================= Operaciones de archivo =================
 
     fun copySelection(cut: Boolean) {
-        val s = selectedItems()
-        if (s.isEmpty()) return
-        clipboard = s.map { it.path }
-        clipCut = cut
-        message = "${s.size} elemento(s) ${if (cut) "cortado(s)" else "copiado(s)"}. Ve a la carpeta destino y pulsa Pegar."
+        val sel = selectedItems()
+        if (sel.isEmpty()) return
+        s.clipboard = sel.map { it.path }
+        s.clipCut = cut
+        s.message = "${sel.size} elemento(s) ${if (cut) "cortado(s)" else "copiado(s)"}. Ve a la carpeta destino y pulsa Pegar."
     }
 
     fun paste() {
         val dest = currentDir ?: return
-        val src = clipboard
+        val src = s.clipboard
         if (src.isEmpty()) return
-        val cut = clipCut
-        runOp(if (cut) "Moviendo ${src.size} elemento(s)…" else "Copiando ${src.size} elemento(s)…") {
+        transfer(src.map { File(it) }, dest, s.clipCut)
+        if (s.clipCut) s.clipboard = emptyList()
+    }
+
+    /** Copia o mueve archivos a una carpeta (pegar, mover a…, al otro panel). */
+    fun transfer(files: List<File>, dest: File, move: Boolean) {
+        if (files.isEmpty()) return
+        s.runOp(if (move) "Moviendo ${files.size} elemento(s)…" else "Copiando ${files.size} elemento(s)…") {
             var n = 0
-            for (p in src) {
-                val f = File(p)
+            for (f in files) {
                 if (!f.exists()) continue
-                if (cut) FileOps.move(f, dest) else FileOps.copy(f, dest)
+                if (move) FileOps.move(f, dest) else FileOps.copy(f, dest)
                 n++
             }
-            "$n elemento(s) ${if (cut) "movido(s)" else "copiado(s)"}"
+            "$n elemento(s) ${if (move) "movido(s)" else "copiado(s)"} a «${dest.name.ifEmpty { dest.path }}»"
         }
-        if (cut) clipboard = emptyList()
     }
 
     fun delete(items: List<FileItem>) {
         if (items.isEmpty()) return
-        runOp("Eliminando ${items.size} elemento(s)…") {
+        s.runOp("Eliminando ${items.size} elemento(s)…") {
             items.forEach { FileOps.delete(it.file) }
-            withContext(Dispatchers.Main) { clipboard = clipboard.filter { p -> items.none { it.path == p } } }
+            withContext(Dispatchers.Main) { s.clipboard = s.clipboard.filter { p -> items.none { it.path == p } } }
             "${items.size} elemento(s) eliminado(s)"
         }
     }
 
     fun rename(item: FileItem, newName: String) {
         if (newName == item.name) return
-        runOp("Cambiando nombre…") {
+        s.runOp("Cambiando nombre…") {
             val target = FileOps.rename(item.file, newName.trim())
-            withContext(Dispatchers.Main) { selection = setOf(target.path) }
+            withContext(Dispatchers.Main) { pendingSelect = target.path }
             "Nombre cambiado a «${target.name}»"
         }
     }
 
     fun newFolder(name: String) {
         val dir = currentDir ?: return
-        runOp("Creando carpeta…") {
+        s.runOp("Creando carpeta…") {
             val f = FileOps.mkdir(dir, name.trim())
-            withContext(Dispatchers.Main) { selection = setOf(f.path) }
+            withContext(Dispatchers.Main) { pendingSelect = f.path }
             "Carpeta «${f.name}» creada"
         }
     }
 
     fun suggestedFolderName(): String = currentDir?.let { FileOps.uniqueNewFolderName(it) } ?: "Nueva carpeta"
 
-    private fun runOp(label: String, block: suspend () -> String) {
-        viewModelScope.launch {
-            busy = label
-            val r = withContext(Dispatchers.IO) { runCatching { block() } }
-            busy = null
-            message = r.getOrElse { "Error: ${it.message}" }
-            load()
-            treeExpanded.forEach { loadTreeChildren(it) }
-            freeSpaceTick++
+    fun compress(items: List<FileItem>) {
+        val dir = currentDir ?: return
+        if (items.isEmpty()) return
+        s.runOp("Comprimiendo ${items.size} elemento(s)…") {
+            val base = if (items.size == 1) items[0].name.substringBeforeLast('.', items[0].name) else (dir.name.ifEmpty { "Archivo" })
+            val zip = FileOps.zip(items.map { it.file }, dir, base)
+            withContext(Dispatchers.Main) { pendingSelect = zip.path }
+            "Creado «${zip.name}»"
         }
     }
 
-    // ================= Acceso rápido =================
-
-    fun pin(path: String) {
-        if (path in pins) return
-        pins = pins + path
-        save { putString("pins", pins.joinToString("\n")) }
-        message = "Anclado a Acceso rápido"
-    }
-
-    fun unpin(path: String) {
-        pins = pins - path
-        save { putString("pins", pins.joinToString("\n")) }
-    }
-
-    // ================= Árbol =================
-
-    fun toggleTree(path: String) {
-        if (path in treeExpanded) treeExpanded = treeExpanded - path
-        else {
-            treeExpanded = treeExpanded + path
-            loadTreeChildren(path)
+    fun extract(item: FileItem) {
+        val dir = currentDir ?: return
+        s.runOp("Extrayendo «${item.name}»…") {
+            val out = FileOps.unzip(item.file, dir)
+            withContext(Dispatchers.Main) { pendingSelect = out.path }
+            "Extraído en «${out.name}»"
         }
     }
+}
 
-    private fun loadTreeChildren(path: String) {
-        viewModelScope.launch {
-            val kids = withContext(Dispatchers.IO) {
-                File(path).listFiles()
-                    ?.filter { it.isDirectory && (showHidden || !it.isHidden) }
-                    ?.map { it.path }
-                    ?.sortedWith(compareBy(NaturalOrder) { File(it).name })
-                    ?: emptyList()
+class Pane(first: ExplorerTab) {
+    val tabs = mutableStateListOf(first)
+    var active by mutableIntStateOf(0)
+    val tab: ExplorerTab get() = tabs[active.coerceIn(0, tabs.lastIndex)]
+}
+
+class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
+    val s = Shared(app, viewModelScope)
+    val panes = mutableStateListOf<Pane>()
+    var activePane by mutableIntStateOf(0); private set
+    var layout by mutableStateOf(
+        s.prefs.getString("layout", null)?.let { v -> PaneLayout.entries.firstOrNull { it.name == v } } ?: PaneLayout.SINGLE
+    ); private set
+    var splitRatio by mutableFloatStateOf(s.prefs.getFloat("splitRatio", 0.5f)); private set
+    private var restoring = false
+
+    val started get() = panes.isNotEmpty()
+    val pane: Pane get() = panes[visiblePaneIndex(activePane)]
+    val tab: ExplorerTab get() = pane.tab
+    val isDual get() = layout != PaneLayout.SINGLE
+    val otherPane: Pane? get() = if (isDual && panes.size > 1) panes[1 - visiblePaneIndex(activePane)] else null
+
+    private fun visiblePaneIndex(i: Int) = if (isDual) i.coerceIn(0, panes.lastIndex) else 0
+
+    init {
+        s.onViewChanged = { allTabs().forEach { it.recompute() } }
+        s.onFsChanged = {
+            allTabs().forEach { it.reload() }
+            s.reloadTree()
+        }
+        s.onSessionChanged = { saveSession() }
+        s.openInNewTab = { dir, sel -> newTab(pane, dir, sel) }
+        s.openInOtherPane = { dir, sel -> openInOtherPane(dir, sel) }
+        s.otherPaneDir = { otherPane?.tab?.currentDir }
+    }
+
+    private fun allTabs() = panes.flatMap { it.tabs }
+
+    fun start(initialPath: String?) {
+        if (started) {
+            if (initialPath != null) newTab(pane, File(initialPath), null)
+            return
+        }
+        s.init()
+        restoring = true
+        val home = s.prefs.getString("lastDir", null)?.let { File(it) }?.takeIf { it.isDirectory && it.canRead() }
+            ?: File(s.roots.first().path)
+        if (initialPath != null) {
+            // Ventana nueva: empieza solo con la carpeta pedida.
+            panes += newPane(listOf(initialPath), 0)
+            panes += newPane(listOf(initialPath), 0)
+            layout = PaneLayout.SINGLE
+        } else {
+            val saved = s.prefs.getString("session", null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+            for (i in 0..1) {
+                val line = saved.getOrNull(i)
+                val active = line?.substringBefore('|')?.toIntOrNull() ?: 0
+                val paths = line?.substringAfter('|', "")?.split('\t')
+                    ?.filter { File(it).isDirectory } .orEmpty()
+                panes += newPane(paths.ifEmpty { listOf(home.path) }, active)
             }
-            treeChildren[path] = kids
+            activePane = s.prefs.getInt("activePane", 0).coerceIn(0, 1)
         }
+        restoring = false
+        saveSession()
+    }
+
+    private fun newPane(paths: List<String>, active: Int): Pane {
+        val tabs = paths.map { p -> ExplorerTab(s).also { it.navigate(File(p), record = false) } }
+        val pane = Pane(tabs.first())
+        tabs.drop(1).forEach { pane.tabs.add(it) }
+        pane.active = active.coerceIn(0, pane.tabs.lastIndex)
+        return pane
+    }
+
+    fun refreshAll() {
+        if (!started) return
+        allTabs().forEach { it.reload() }
+        s.reloadTree()
+    }
+
+    fun saveSession() {
+        if (restoring || panes.isEmpty()) return
+        val text = panes.joinToString("\n") { p ->
+            "${p.active}|" + p.tabs.mapNotNull { it.currentDir?.path }.joinToString("\t")
+        }
+        s.save { putString("session", text); putInt("activePane", activePane) }
+    }
+
+    fun activatePane(i: Int) {
+        if (!isDual || activePane == i) return
+        activePane = i
+        saveSession()
+    }
+
+    fun switchPane() {
+        if (isDual) activatePane(1 - visiblePaneIndex(activePane))
+    }
+
+    fun setPaneLayout(l: PaneLayout) {
+        layout = l
+        if (l == PaneLayout.SINGLE) activePane = 0
+        s.save { putString("layout", l.name) }
+    }
+
+    fun dragSplit(fraction: Float) {
+        splitRatio = (splitRatio + fraction).coerceIn(0.2f, 0.8f)
+        s.save { putFloat("splitRatio", splitRatio) }
+    }
+
+    fun swapPanes() {
+        if (panes.size < 2) return
+        val a = panes[0]
+        panes[0] = panes[1]
+        panes[1] = a
+        activePane = 1 - activePane
+        saveSession()
+    }
+
+    // ---- Pestañas ----
+
+    fun newTab(target: Pane, dir: File?, select: String? = null) {
+        val d = dir ?: target.tab.currentDir ?: return
+        val t = ExplorerTab(s)
+        target.tabs.add(target.active + 1, t)
+        target.active += 1
+        t.navigate(d, record = false, select = select)
+        saveSession()
+    }
+
+    fun selectTab(target: Pane, i: Int) {
+        target.active = i.coerceIn(0, target.tabs.lastIndex)
+        saveSession()
+    }
+
+    fun closeTab(target: Pane, i: Int) {
+        if (target.tabs.size <= 1) return
+        target.tabs.removeAt(i)
+        if (target.active >= i && target.active > 0) target.active -= 1
+        target.active = target.active.coerceIn(0, target.tabs.lastIndex)
+        saveSession()
+    }
+
+    fun closeOtherTabs(target: Pane, i: Int) {
+        val keep = target.tabs[i]
+        target.tabs.clear()
+        target.tabs.add(keep)
+        target.active = 0
+        saveSession()
+    }
+
+    fun nextTab(delta: Int) {
+        val p = pane
+        if (p.tabs.size < 2) return
+        p.active = (p.active + delta).mod(p.tabs.size)
+        saveSession()
+    }
+
+    fun moveTabToOtherPane(from: Pane, i: Int) {
+        if (!isDual) setPaneLayout(PaneLayout.SIDE_BY_SIDE)
+        val to = panes.firstOrNull { it !== from } ?: return
+        val dir = from.tabs[i].currentDir ?: return
+        newTab(to, dir)
+        closeTab(from, i)
+    }
+
+    fun openInOtherPane(dir: File, select: String?) {
+        if (!isDual) setPaneLayout(PaneLayout.SIDE_BY_SIDE)
+        val other = otherPane ?: return
+        newTab(other, dir, select)
+    }
+
+    /** Copia o mueve la selección del panel activo a la carpeta del otro panel. */
+    fun transferToOtherPane(move: Boolean) {
+        val dest = otherPane?.tab?.currentDir ?: return
+        val items = tab.selectedItems()
+        if (items.isEmpty()) {
+            s.message = "Selecciona elementos para ${if (move) "mover" else "copiar"} al otro panel"
+            return
+        }
+        tab.transfer(items.map { it.file }, dest, move)
     }
 }

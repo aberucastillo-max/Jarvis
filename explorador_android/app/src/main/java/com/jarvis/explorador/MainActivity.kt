@@ -41,6 +41,10 @@ import com.jarvis.explorador.ui.ExploradorTheme
 import com.jarvis.explorador.ui.FolderColor
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_PATH = "path"
+    }
+
     private val vm: ExplorerViewModel by viewModels()
     private val granted = mutableStateOf(false)
 
@@ -53,10 +57,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         granted.value = hasPermission()
+        val startPath = intent?.getStringExtra(EXTRA_PATH)
         setContent {
             ExploradorTheme {
                 if (granted.value) {
-                    LaunchedEffect(Unit) { vm.start() }
+                    LaunchedEffect(Unit) { vm.start(startPath) }
                     ExplorerScreen(vm)
                 } else {
                     PermissionScreen { requestPermission() }
@@ -69,7 +74,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         val g = hasPermission()
         if (g != granted.value) granted.value = g
-        if (g) vm.refreshIfStarted()
+        if (g) vm.refreshAll()
     }
 
     private fun hasPermission(): Boolean =

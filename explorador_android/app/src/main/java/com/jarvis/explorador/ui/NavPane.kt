@@ -60,7 +60,7 @@ private sealed interface NavRow {
 }
 
 @Composable
-fun NavPane(vm: ExplorerViewModel, modifier: Modifier) {
+fun NavPane(vm: ExplorerTab, modifier: Modifier) {
     val rows = buildList {
         add(NavRow.Header("Acceso rápido"))
         vm.quickAccess.forEach { q ->
@@ -113,7 +113,7 @@ fun NavPane(vm: ExplorerViewModel, modifier: Modifier) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun QuickRow(vm: ExplorerViewModel, row: NavRow.Quick) {
+private fun QuickRow(vm: ExplorerTab, row: NavRow.Quick) {
     var menu by remember { mutableStateOf(false) }
     val current = vm.currentDir?.path == row.path
     Box {
@@ -126,7 +126,7 @@ private fun QuickRow(vm: ExplorerViewModel, row: NavRow.Quick) {
                 .background(if (current) selectionBg else Color.Transparent)
                 .combinedClickable(
                     onClick = { vm.navigate(File(row.path)) },
-                    onLongClick = { if (row.pinned) menu = true },
+                    onLongClick = { menu = true },
                 )
                 .padding(start = 26.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -139,13 +139,18 @@ private fun QuickRow(vm: ExplorerViewModel, row: NavRow.Quick) {
             }
         }
         DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem(text = { Text("Desanclar de Acceso rápido") }, onClick = { menu = false; vm.unpin(row.path) })
+            DropdownMenuItem(text = { Text("Abrir en nueva pestaña") }, onClick = { menu = false; vm.openInNewTab(File(row.path)) })
+            DropdownMenuItem(text = { Text("Abrir en el otro panel") }, onClick = { menu = false; vm.openInOtherPane(File(row.path)) })
+            DropdownMenuItem(text = { Text("Abrir en nueva ventana") }, onClick = { menu = false; vm.openInNewWindow(File(row.path)) })
+            if (row.pinned) {
+                DropdownMenuItem(text = { Text("Desanclar de Acceso rápido") }, onClick = { menu = false; vm.unpin(row.path) })
+            }
         }
     }
 }
 
 @Composable
-private fun TreeRow(vm: ExplorerViewModel, row: NavRow.Tree) {
+private fun TreeRow(vm: ExplorerTab, row: NavRow.Tree) {
     val current = vm.currentDir?.path == row.path
     val expanded = row.path in vm.treeExpanded
     val loadedEmpty = vm.treeChildren[row.path]?.isEmpty() == true
