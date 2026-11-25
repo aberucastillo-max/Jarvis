@@ -172,6 +172,12 @@ object FileOps {
         }
     }
 
+    /** «nombre.ext» libre en [dir]: «nombre (2).ext», «nombre (3).ext»… */
+    fun uniqueChild(dir: File, name: String): File {
+        val dot = name.lastIndexOf('.')
+        return if (dot > 0) uniqueFile(dir, name.substring(0, dot), name.substring(dot)) else uniqueFile(dir, name, "")
+    }
+
     private fun uniqueFile(dir: File, base: String, ext: String): File {
         var f = File(dir, "$base$ext")
         var n = 2

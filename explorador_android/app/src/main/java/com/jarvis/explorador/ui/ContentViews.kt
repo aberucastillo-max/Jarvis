@@ -1,6 +1,34 @@
 package com.jarvis.explorador.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import android.os.SystemClock
+import android.view.View
+import androidx.compose.foundation.draganddrop.DragAndDropSourceScope
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
+import com.jarvis.explorador.data.FileTypes
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -100,24 +128,78 @@ import com.jarvis.explorador.data.SortField
 import com.jarvis.explorador.data.ViewMode
 import java.io.File
 
-/** Estado compartido por todas las vistas para el menú contextual. */
+/** Petición de menú contextual: elemento (o fondo de la carpeta si es null) y posición. */
+private data class MenuReq(val item: FileItem?, val pos: Offset)
+
 private class ItemCallbacks(
     val vm: ExplorerTab,
-    val menuFor: String?,
-    val setMenu: (String?) -> Unit,
     val dialog: (DialogReq) -> Unit,
     val onInteract: () -> Unit,
-)
+    val openMenu: (FileItem) -> Unit,
+) {
+    /** Evita que el toque que suelta una pulsación larga cuente también como clic. */
+    var suppressClickUntil = 0L
+}
 
 @Composable
 fun ContentArea(vm: ExplorerTab, dialog: (DialogReq) -> Unit, onInteract: () -> Unit) {
-    var menuFor by remember { mutableStateOf<String?>(null) }
-    val cb = ItemCallbacks(vm, menuFor, { menuFor = it }, dialog, onInteract)
+    var menu by remember { mutableStateOf<MenuReq?>(null) }
+    var lastDown by remember { mutableStateOf(Offset.Zero) }
+    var area by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val haptic = LocalHapticFeedback.current
+    val cb = remember(vm) {
+        ItemCallbacks(vm, dialog, onInteract) { item ->
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            vm.onLongPress(item)
+            menu = MenuReq(item, lastDown)
+        }
+    }
 
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { vm.clearSelection(); onInteract() }) }
+            .onGloballyPositioned { area = it }
+            // Clic derecho (ratón / botón del S Pen): menú contextual; arrastrar con clic derecho selecciona varios.
+            .pointerInput(vm) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (e.type != PointerEventType.Press) continue
+                        val ch = e.changes.firstOrNull() ?: continue
+                        lastDown = ch.position
+                        if (!e.buttons.isSecondaryPressed) continue
+                        e.changes.forEach { it.consume() }
+                        onInteract()
+                        val toRoot = { p: Offset -> area?.localToRoot(p) ?: p }
+                        val start = vm.hit(toRoot(ch.position))
+                        var moved = false
+                        var last = ch.position
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val c = ev.changes.firstOrNull() ?: break
+                            c.consume()
+                            last = c.position
+                            if (ev.type == PointerEventType.Release || !ev.buttons.isSecondaryPressed) break
+                            val k = vm.hit(toRoot(c.position))
+                            if (start != null && k != null && (k != start || moved)) {
+                                moved = moved || k != start
+                                vm.selectRange(start, k)
+                            }
+                        }
+                        val item = start?.let { p -> vm.currentItems.firstOrNull { it.path == p } }
+                        if (!moved) {
+                            if (item == null) vm.clearSelection() else if (item.path !in vm.selection) vm.selectOnly(item)
+                        }
+                        menu = MenuReq(if (moved) vm.focused ?: item else item, last)
+                    }
+                }
+            }
+            .pointerInput(vm) {
+                detectTapGestures(
+                    onTap = { vm.clearSelection(); onInteract() },
+                    onLongPress = { p -> vm.clearSelection(); menu = MenuReq(null, p) },
+                )
+            }
     ) {
         when {
             vm.loading && vm.currentItems.isEmpty() ->
@@ -138,6 +220,15 @@ fun ContentArea(vm: ExplorerTab, dialog: (DialogReq) -> Unit, onInteract: () -> 
                 ViewMode.LARGE_ICONS -> GridItems(cb, 180.dp) { IconCell(it, cb, 140.dp) }
             }
         }
+        menu?.let { m ->
+            Box(Modifier.offset { IntOffset(m.pos.x.roundToInt(), m.pos.y.roundToInt()) }.size(1.dp)) {
+                DropdownMenu(expanded = true, onDismissRequest = { menu = null }) {
+                    val close = { menu = null }
+                    if (m.item != null) ItemMenuItems(m.item, vm, dialog, close)
+                    else BackgroundMenuItems(vm, dialog, close)
+                }
+            }
+        }
     }
 }
 
@@ -152,11 +243,47 @@ private fun CenterMessage(text: String) {
 private fun Modifier.itemGestures(item: FileItem, cb: ItemCallbacks): Modifier {
     val vm = cb.vm
     val singleTapOpens = item.isDir && vm.tapOpensFolders && !vm.selectionMode
-    return combinedClickable(
-        onClick = { cb.onInteract(); vm.onTap(item) },
-        onDoubleClick = if (singleTapOpens) null else ({ vm.onDoubleTap(item) }),
-        onLongClick = { cb.onInteract(); vm.onLongPress(item); cb.setMenu(item.path) },
-    )
+    val startDrag: DragAndDropSourceScope.() -> Unit = {
+        val (clip, payload) = vm.dragData(item)
+        startTransfer(DragAndDropTransferData(clip, payload, View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ))
+    }
+    return this
+        .onGloballyPositioned { vm.rowCoords[item.path] = it }
+        .combinedClickable(
+            onClick = {
+                if (SystemClock.uptimeMillis() > cb.suppressClickUntil) { cb.onInteract(); vm.onTap(item) }
+            },
+            onDoubleClick = if (singleTapOpens) null else ({ vm.onDoubleTap(item) }),
+        )
+        // Arrastrar a otro panel o a otra app: ratón = arrastrar; táctil = mantener pulsado y mover.
+        // Mantener pulsado y soltar sin mover = menú contextual.
+        .dragAndDropSource {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                if (down.type == PointerType.Mouse) {
+                    val drag = awaitTouchSlopOrCancellation(down.id) { ch, _ -> ch.consume() }
+                    if (drag != null) startDrag()
+                } else {
+                    val lp = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                    cb.suppressClickUntil = SystemClock.uptimeMillis() + 60_000
+                    lp.consume()
+                    var dragging = false
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!c.pressed) { c.consume(); break }
+                        if ((c.position - lp.position).getDistance() > viewConfiguration.touchSlop) {
+                            dragging = true
+                            c.consume()
+                            break
+                        }
+                        c.consume()
+                    }
+                    cb.suppressClickUntil = SystemClock.uptimeMillis() + 400
+                    if (dragging) startDrag() else cb.openMenu(item)
+                }
+            }
+        }
 }
 
 @Composable
@@ -343,7 +470,6 @@ private fun DetailsRow(item: FileItem, cb: ItemCallbacks, rowH: Dp) {
                     modifier = Modifier.width(vm.colSize.dp).padding(start = 14.dp, end = 4.dp))
             }
         }
-        if (cb.menuFor == item.path) ItemContextMenu(item, cb)
     }
 }
 
@@ -429,7 +555,6 @@ private fun ListCell(item: FileItem, cb: ItemCallbacks) {
             Spacer(Modifier.width(8.dp))
             Text(item.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (cb.menuFor == item.path) ItemContextMenu(item, cb)
     }
 }
 
@@ -461,7 +586,6 @@ private fun TileCell(item: FileItem, cb: ItemCallbacks) {
                 )
             }
         }
-        if (cb.menuFor == item.path) ItemContextMenu(item, cb)
     }
 }
 
@@ -492,7 +616,6 @@ private fun IconCell(item: FileItem, cb: ItemCallbacks, size: Dp) {
                 textAlign = TextAlign.Center, lineHeight = 15.sp,
             )
         }
-        if (cb.menuFor == item.path) ItemContextMenu(item, cb)
     }
 }
 
@@ -534,53 +657,80 @@ fun Thumb(item: FileItem, size: Dp) {
 // ======================= Menú contextual =======================
 
 @Composable
-private fun ItemContextMenu(item: FileItem, cb: ItemCallbacks) {
-    val vm = cb.vm
+private fun ItemMenuItems(item: FileItem, vm: ExplorerTab, dialog: (DialogReq) -> Unit, close: () -> Unit) {
     val clipboard = LocalClipboardManager.current
-    val close = { cb.setMenu(null) }
-    val onClose by rememberUpdatedState(close)
-    DropdownMenu(expanded = true, onDismissRequest = { onClose() }) {
-        MenuEntry(if (item.isDir) Icons.Filled.FolderOpen else Icons.AutoMirrored.Filled.OpenInNew, "Abrir") {
-            close(); vm.open(item)
-        }
-        if (!item.isDir) MenuEntry(Icons.AutoMirrored.Filled.OpenInNew, "Abrir con…") { close(); vm.openWith(item) }
-        HorizontalDivider()
-        if (vm.searchResults != null) {
-            HorizontalDivider()
-            MenuEntry(Icons.Filled.FolderOpen, "Abrir ubicación del archivo") { close(); vm.openLocation(item) }
-            MenuEntry(Icons.Filled.Tab, "Abrir ubicación en nueva pestaña") {
-                close(); vm.openInNewTab(File(item.parent), item.path)
-            }
-            MenuEntry(Icons.Filled.VerticalSplit, "Abrir ubicación en el otro panel") {
-                close(); vm.openInOtherPane(File(item.parent), item.path)
-            }
-            MenuEntry(Icons.Filled.OpenInBrowser, "Abrir ubicación en nueva ventana") {
-                close(); vm.openInNewWindow(File(item.parent))
+    val sel = vm.selectedItems().ifEmpty { listOf(item) }
+    val multi = sel.size > 1
+    val files = sel.filter { !it.isDir }
+    val dual = vm.s.isDual()
+    if (multi) {
+        Text(
+            "${sel.size} elementos seleccionados", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+    } else {
+        MenuEntry(if (item.isDir) Icons.Filled.FolderOpen else Icons.AutoMirrored.Filled.OpenInNew, "Abrir") { close(); vm.open(item) }
+        if (!item.isDir) {
+            MenuEntry(Icons.Filled.Apps, "Abrir con…") { close(); vm.openWith(item) }
+            if (FileTypes.isTextPreviewable(item.category) || item.extension.isEmpty() || item.size < 512 * 1024) {
+                MenuEntry(Icons.Filled.Edit, "Editar en una pestaña") { close(); vm.edit(item) }
             }
         }
-        if (item.isDir) {
-            HorizontalDivider()
-            MenuEntry(Icons.Filled.Tab, "Abrir en nueva pestaña") { close(); vm.openInNewTab(File(item.path)) }
-            MenuEntry(Icons.Filled.VerticalSplit, "Abrir en el otro panel") { close(); vm.openInOtherPane(File(item.path)) }
-            MenuEntry(Icons.Filled.OpenInBrowser, "Abrir en nueva ventana") { close(); vm.openInNewWindow(File(item.path)) }
-        }
+    }
+    if (vm.searchResults != null && !multi) {
         HorizontalDivider()
-        MenuEntry(Icons.Filled.ContentCut, "Cortar") { close(); vm.copySelection(true) }
-        MenuEntry(Icons.Filled.ContentCopy, "Copiar") { close(); vm.copySelection(false) }
-        MenuEntry(Icons.Filled.DriveFileMove, "Mover a…") { close(); cb.dialog(DialogReq.PickFolder(vm.selectedItems(), move = true)) }
-        MenuEntry(Icons.Filled.FileCopy, "Copiar a…") { close(); cb.dialog(DialogReq.PickFolder(vm.selectedItems(), move = false)) }
-        MenuEntry(Icons.Filled.DriveFileRenameOutline, "Cambiar nombre") { close(); cb.dialog(DialogReq.Rename(item)) }
-        MenuEntry(Icons.Filled.Delete, "Eliminar") { close(); cb.dialog(DialogReq.Delete(vm.selectedItems())) }
+        MenuEntry(Icons.Filled.FolderOpen, "Abrir ubicación del archivo") { close(); vm.openLocation(item) }
+        MenuEntry(Icons.Filled.Tab, "Abrir ubicación en nueva pestaña") { close(); vm.openInNewTab(File(item.parent), item.path) }
+        MenuEntry(Icons.Filled.VerticalSplit, "Abrir ubicación en el otro panel") { close(); vm.openInOtherPane(File(item.parent), item.path) }
+        MenuEntry(Icons.Filled.OpenInBrowser, "Abrir ubicación en nueva ventana") { close(); vm.openInNewWindow(File(item.parent)) }
+    }
+    if (item.isDir && !multi) {
         HorizontalDivider()
-        MenuEntry(Icons.Filled.Share, "Compartir") { close(); vm.share(vm.selectedItems()) }
-        MenuEntry(Icons.Filled.FolderZip, "Comprimir en ZIP") { close(); vm.compress(vm.selectedItems()) }
-        if (item.extension == "zip") MenuEntry(Icons.Filled.Unarchive, "Extraer todo") { close(); vm.extract(item) }
-        if (item.isDir) MenuEntry(Icons.Filled.PushPin, "Anclar a Acceso rápido") { close(); vm.pin(item.path) }
-        MenuEntry(Icons.Filled.Link, "Copiar ruta") { close(); clipboard.setText(AnnotatedString(item.path)) }
-        MenuEntry(Icons.Filled.SelectAll, if (vm.selectionMode) "Salir de selección múltiple" else "Selección múltiple") {
-            close(); vm.setSelectionModeOn(!vm.selectionMode)
-        }
-        MenuEntry(Icons.Filled.Info, "Propiedades") { close(); vm.showPreviewFor(item) }
+        MenuEntry(Icons.Filled.Tab, "Abrir en nueva pestaña") { close(); vm.openInNewTab(File(item.path)) }
+        MenuEntry(Icons.Filled.VerticalSplit, "Abrir en el otro panel") { close(); vm.openInOtherPane(File(item.path)) }
+        MenuEntry(Icons.Filled.OpenInBrowser, "Abrir en nueva ventana") { close(); vm.openInNewWindow(File(item.path)) }
+    }
+    HorizontalDivider()
+    MenuEntry(Icons.Filled.ContentCut, "Cortar") { close(); vm.copySelection(true) }
+    MenuEntry(Icons.Filled.ContentCopy, "Copiar") { close(); vm.copySelection(false) }
+    if (dual) {
+        MenuEntry(Icons.Filled.FileCopy, "Copiar al otro panel") { close(); vm.s.transferToOther(sel.map { it.file }, false) }
+        MenuEntry(Icons.Filled.DriveFileMove, "Mover al otro panel") { close(); vm.s.transferToOther(sel.map { it.file }, true) }
+    }
+    MenuEntry(Icons.Filled.DriveFileMove, "Mover a…") { close(); dialog(DialogReq.PickFolder(sel, move = true)) }
+    MenuEntry(Icons.Filled.FileCopy, "Copiar a…") { close(); dialog(DialogReq.PickFolder(sel, move = false)) }
+    if (!multi) MenuEntry(Icons.Filled.DriveFileRenameOutline, "Cambiar nombre") { close(); dialog(DialogReq.Rename(item)) }
+    MenuEntry(Icons.Filled.Delete, "Eliminar") { close(); dialog(DialogReq.Delete(sel)) }
+    HorizontalDivider()
+    if (files.isNotEmpty()) MenuEntry(Icons.Filled.Share, "Compartir") { close(); vm.share(files) }
+    MenuEntry(Icons.Filled.FolderZip, "Comprimir en ZIP") { close(); vm.compress(sel) }
+    if (!multi && item.extension == "zip") MenuEntry(Icons.Filled.Unarchive, "Extraer todo") { close(); vm.extract(item) }
+    if (!multi && item.isDir) MenuEntry(Icons.Filled.PushPin, "Anclar a Acceso rápido") { close(); vm.pin(item.path) }
+    MenuEntry(Icons.Filled.Link, if (multi) "Copiar rutas" else "Copiar ruta") {
+        close(); clipboard.setText(AnnotatedString(sel.joinToString("\n") { it.path }))
+    }
+    MenuEntry(Icons.Filled.Info, "Propiedades") { close(); vm.showPreviewFor(item) }
+}
+
+@Composable
+private fun BackgroundMenuItems(vm: ExplorerTab, dialog: (DialogReq) -> Unit, close: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val dir = vm.currentDir
+    if (vm.clipboard.isNotEmpty()) {
+        MenuEntry(Icons.Filled.ContentPaste, "Pegar (${vm.clipboard.size})") { close(); vm.paste() }
+        HorizontalDivider()
+    }
+    MenuEntry(Icons.Filled.CreateNewFolder, "Nueva carpeta") { close(); dialog(DialogReq.NewFolder) }
+    MenuEntry(Icons.Filled.Description, "Nuevo documento de texto") { close(); vm.newTextFile() }
+    HorizontalDivider()
+    MenuEntry(Icons.Filled.SelectAll, "Seleccionar todo") { close(); vm.selectAll() }
+    MenuEntry(Icons.Filled.Refresh, "Actualizar") { close(); vm.refresh() }
+    if (dir != null) {
+        HorizontalDivider()
+        MenuEntry(Icons.Filled.Tab, "Abrir carpeta en nueva pestaña") { close(); vm.openInNewTab(dir) }
+        MenuEntry(Icons.Filled.VerticalSplit, "Abrir carpeta en el otro panel") { close(); vm.openInOtherPane(dir) }
+        MenuEntry(Icons.Filled.PushPin, "Anclar a Acceso rápido") { close(); vm.pin(dir.path) }
+        MenuEntry(Icons.Filled.Link, "Copiar ruta de la carpeta") { close(); clipboard.setText(AnnotatedString(dir.path)) }
     }
 }
 

@@ -1,6 +1,22 @@
 package com.jarvis.explorador.ui
 
 import androidx.activity.compose.BackHandler
+import android.app.Activity
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.WrapText
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.TextDecrease
+import androidx.compose.material.icons.filled.TextIncrease
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -141,6 +157,13 @@ sealed interface DialogReq {
     data object NewFolder : DialogReq
     data class Delete(val items: List<FileItem>) : DialogReq
     data class PickFolder(val items: List<FileItem>, val move: Boolean) : DialogReq
+    data class CloseDoc(val pane: Pane, val index: Int) : DialogReq
+}
+
+/** Cierra una pestaña de documento pidiendo confirmación si hay cambios. */
+fun requestCloseDoc(vm: ExplorerViewModel, pane: Pane, i: Int, dialog: (DialogReq) -> Unit) {
+    val d = pane.docs.getOrNull(i) ?: return
+    if (d.dirty) dialog(DialogReq.CloseDoc(pane, i)) else vm.closeDoc(pane, i)
 }
 
 @Composable
@@ -159,8 +182,9 @@ fun ExplorerScreen(vm: ExplorerViewModel) {
     }
     LaunchedEffect(Unit) { runCatching { rootFocus.requestFocus() } }
 
-    BackHandler(enabled = tab.selectionMode || tab.searchResults != null || tab.canBack) {
+    BackHandler(enabled = vm.editorActive || tab.selectionMode || tab.searchResults != null || tab.canBack) {
         when {
+            vm.editorActive -> requestCloseDoc(vm, vm.pane, vm.pane.activeDoc ?: 0) { dialog = it }
             tab.selectionMode -> tab.setSelectionModeOn(false)
             tab.searchResults != null -> tab.cancelSearch()
             else -> tab.goBack()
@@ -208,6 +232,16 @@ private fun handleKey(vm: ExplorerViewModel, e: KeyEvent, dialog: (DialogReq) ->
     if (e.type != KeyEventType.KeyDown) return false
     val tab = vm.tab
     val ctrl = e.isCtrlPressed
+    if (vm.editorActive) {
+        // En el editor solo se atienden atajos globales; el resto es para el texto.
+        when {
+            ctrl && e.key == Key.W -> requestCloseDoc(vm, vm.pane, vm.pane.activeDoc ?: 0, dialog)
+            ctrl && e.key == Key.Tab -> vm.nextTab(if (e.isShiftPressed) -1 else 1)
+            e.key == Key.F6 -> vm.switchPane()
+            else -> return false
+        }
+        return true
+    }
     when {
         ctrl && e.key == Key.Tab -> vm.nextTab(if (e.isShiftPressed) -1 else 1)
         ctrl && e.key == Key.T -> vm.newTab(vm.pane, tab.currentDir)
@@ -278,6 +312,7 @@ private fun PanesArea(vm: ExplorerViewModel, dialog: (DialogReq) -> Unit, onInte
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PaneView(
     vm: ExplorerViewModel,
@@ -289,6 +324,20 @@ private fun PaneView(
     val pane = vm.panes[index]
     val highlight = vm.isDual && vm.activePane == index
     val tab = pane.tab
+    val doc = pane.doc
+    val activity = LocalContext.current as? Activity
+    var dropHover by remember { mutableStateOf(false) }
+    val target = remember(pane) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                dropHover = false
+                return handleDrop(pane, event, activity)
+            }
+            override fun onEntered(event: DragAndDropEvent) { dropHover = true }
+            override fun onExited(event: DragAndDropEvent) { dropHover = false }
+            override fun onEnded(event: DragAndDropEvent) { dropHover = false }
+        }
+    }
     Column(
         modifier
             .pointerInput(index) {
@@ -297,6 +346,8 @@ private fun PaneView(
                     vm.activatePane(index)
                 }
             }
+            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = target)
+            .border(if (dropHover) 2.dp else 0.dp, if (dropHover) MaterialTheme.colorScheme.primary else Color.Transparent)
     ) {
         Box(
             Modifier
@@ -304,19 +355,43 @@ private fun PaneView(
                 .height(3.dp)
                 .background(if (highlight) MaterialTheme.colorScheme.primary else Color.Transparent)
         )
-        TabStrip(vm, pane)
-        key(tab.id) {
-            AddressBar(tab)
-            Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-                ContentArea(tab, dialog, onInteract)
+        TabStrip(vm, pane, dialog)
+        if (doc != null) {
+            key(doc.id) { EditorView(doc, vm.s, onSave = { vm.saveDoc(doc) }, Modifier.weight(1f).fillMaxWidth()) }
+        } else {
+            key(tab.id) {
+                AddressBar(tab)
+                Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+                    ContentArea(tab, dialog, onInteract)
+                }
             }
         }
     }
 }
 
+/** Soltar en un panel: desde este explorador mueve/copia; desde otra app copia los archivos. */
+@OptIn(ExperimentalFoundationApi::class)
+private fun handleDrop(pane: Pane, event: DragAndDropEvent, activity: Activity?): Boolean {
+    val ev = event.toAndroidDragEvent()
+    val tab = pane.tab
+    val base = tab.currentDir ?: return false
+    val dest = if (pane.doc == null) tab.itemAt(Offset(ev.x, ev.y))?.takeIf { it.isDir }?.file ?: base else base
+    val local = ev.localState as? DragPayload
+    if (local != null) {
+        tab.dropPaths(local.paths, dest)
+        return true
+    }
+    activity?.requestDragAndDropPermissions(ev)
+    val clip = ev.clipData ?: return false
+    val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+    if (uris.isEmpty()) return false
+    tab.importUris(uris, dest)
+    return true
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TabStrip(vm: ExplorerViewModel, pane: Pane) {
+private fun TabStrip(vm: ExplorerViewModel, pane: Pane, dialog: (DialogReq) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -327,7 +402,7 @@ private fun TabStrip(vm: ExplorerViewModel, pane: Pane) {
     ) {
         Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.Bottom) {
             pane.tabs.forEachIndexed { i, t ->
-                val selected = i == pane.active
+                val selected = i == pane.active && pane.activeDoc == null
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     Row(
@@ -374,6 +449,42 @@ private fun TabStrip(vm: ExplorerViewModel, pane: Pane) {
                             HorizontalDivider()
                             DropdownMenuItem(text = { Text("Cerrar otras pestañas") }, onClick = { menu = false; vm.closeOtherTabs(pane, i) })
                             DropdownMenuItem(text = { Text("Cerrar pestaña") }, onClick = { menu = false; vm.closeTab(pane, i) })
+                        }
+                    }
+                }
+            }
+        }
+        if (pane.docs.isNotEmpty()) {
+            Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.Bottom) {
+                pane.docs.forEachIndexed { i, d ->
+                    val selected = pane.activeDoc == i
+                    Row(
+                        Modifier
+                            .padding(start = 2.dp)
+                            .height(30.dp)
+                            .widthIn(max = 220.dp)
+                            .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clickable { vm.selectDoc(pane, i) }
+                            .padding(start = 10.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Description, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            d.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (d.dirty) {
+                            Spacer(Modifier.width(5.dp))
+                            Box(Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.primary))
+                        }
+                        Box(
+                            Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)).clickable { requestCloseDoc(vm, pane, i, dialog) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Filled.Close, "Cerrar documento", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -540,6 +651,7 @@ private fun SearchBox(vm: ExplorerTab, modifier: Modifier) {
 
 @Composable
 private fun CommandBar(vm: ExplorerViewModel, dialog: (DialogReq) -> Unit) {
+    vm.pane.doc?.let { d -> EditorCommandBar(vm, d, dialog); return }
     val tab = vm.tab
     val sel = tab.selection
     val hasSel = sel.isNotEmpty()
@@ -579,6 +691,39 @@ private fun CommandBar(vm: ExplorerViewModel, dialog: (DialogReq) -> Unit) {
             ToolButton(Icons.Filled.VerticalSplit, "Vista previa", false, true, active = vm.s.showPreview) { vm.s.togglePreview() }
             MoreMenu(vm, dialog)
         }
+    }
+}
+
+@Composable
+private fun EditorCommandBar(vm: ExplorerViewModel, d: EditorDoc, dialog: (DialogReq) -> Unit) {
+    val s = vm.s
+    val pane = vm.pane
+    val item = remember(d.file.path) { com.jarvis.explorador.data.FileOps.toItem(d.file) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ToolButton(Icons.Filled.Save, "Guardar", true, d.dirty) { vm.saveDoc(d) }
+        ToolButton(Icons.AutoMirrored.Filled.Undo, "Deshacer", false, d.undoCount > 0) { d.undo() }
+        ToolButton(Icons.AutoMirrored.Filled.Redo, "Rehacer", false, d.redoCount > 0) { d.redo() }
+        BarDivider()
+        ToolButton(Icons.Filled.Search, "Buscar", true, active = d.findOpen) { d.findOpen = !d.findOpen }
+        ToolButton(Icons.AutoMirrored.Filled.WrapText, "Ajuste de línea", true, active = s.editorWrap) { s.toggleEditorWrap() }
+        ToolButton(Icons.Filled.TextDecrease, "Letra más pequeña", false) { s.setEditorFont(s.editorFont - 1) }
+        ToolButton(Icons.Filled.TextIncrease, "Letra más grande", false) { s.setEditorFont(s.editorFont + 1) }
+        BarDivider()
+        ToolButton(Icons.Filled.Apps, "Abrir con…", true) { vm.tab.openWith(item) }
+        ToolButton(Icons.Filled.Share, "Compartir", true) { vm.tab.share(listOf(item)) }
+        ToolButton(Icons.Filled.FolderOpen, "Mostrar carpeta", true) {
+            pane.activeDoc = null
+            d.file.parentFile?.let { vm.tab.navigate(it, select = d.file.path) }
+        }
+        BarDivider()
+        ToolButton(Icons.Filled.Close, "Cerrar", true) { requestCloseDoc(vm, pane, pane.activeDoc ?: 0, dialog) }
     }
 }
 
@@ -911,6 +1056,29 @@ private fun Dialogs(d: DialogReq, vm: ExplorerViewModel, dismiss: () -> Unit) {
                     TextButton(onClick = { tab.delete(items); dismiss() }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
                 },
                 dismissButton = { TextButton(onClick = dismiss) { Text("Cancelar") } },
+            )
+        }
+        is DialogReq.CloseDoc -> {
+            val doc = d.pane.docs.getOrNull(d.index)
+            if (doc == null) { dismiss(); return }
+            AlertDialog(
+                onDismissRequest = dismiss,
+                title = { Text("¿Guardar los cambios?") },
+                text = { Text("«${doc.name}» tiene cambios sin guardar.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (vm.saveDoc(doc)) vm.closeDoc(d.pane, d.index)
+                        dismiss()
+                    }) { Text("Guardar") }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { vm.closeDoc(d.pane, d.index); dismiss() }) {
+                            Text("Descartar", color = MaterialTheme.colorScheme.error)
+                        }
+                        TextButton(onClick = dismiss) { Text("Cancelar") }
+                    }
+                },
             )
         }
         is DialogReq.PickFolder -> {

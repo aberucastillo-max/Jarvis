@@ -7,6 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -61,6 +65,15 @@ class Shared(val app: Application, val scope: CoroutineScope) {
     var openInNewTab: (File, String?) -> Unit = { _, _ -> }
     var openInOtherPane: (File, String?) -> Unit = { _, _ -> }
     var otherPaneDir: () -> File? = { null }
+    var openInEditor: (File) -> Unit = {}
+    var isDual: () -> Boolean = { false }
+    var transferToOther: (List<File>, Boolean) -> Unit = { _, _ -> }
+
+    // Editor de texto integrado
+    var editorFont by mutableFloatStateOf(prefs.getFloat("editorFont", 14f)); private set
+    var editorWrap by mutableStateOf(prefs.getBoolean("editorWrap", true)); private set
+    fun setEditorFont(v: Float) { editorFont = v.coerceIn(10f, 28f); save { putFloat("editorFont", editorFont) } }
+    fun toggleEditorWrap() { editorWrap = !editorWrap; save { putBoolean("editorWrap", editorWrap) } }
 
     var roots: List<StorageRoot> = emptyList(); private set
     var quickAccess: List<QuickPlace> = emptyList(); private set
@@ -520,7 +533,98 @@ class ExplorerTab(val s: Shared) {
         FileProvider.getUriForFile(s.app, s.app.packageName + ".files", File(path))
 
     fun open(item: FileItem) {
-        if (item.isDir) navigate(File(item.path)) else launchView(item, chooser = false)
+        when {
+            item.isDir -> navigate(File(item.path))
+            FileTypes.isTextPreviewable(item.category) -> s.openInEditor(item.file)
+            else -> launchView(item, chooser = false)
+        }
+    }
+
+    fun edit(item: FileItem) = s.openInEditor(item.file)
+
+    // ---- Arrastrar y soltar ----
+
+    /** Posición en pantalla de cada fila visible (para clic derecho y soltar sobre carpetas). */
+    val rowCoords = HashMap<String, LayoutCoordinates>()
+
+    fun hit(rootPos: Offset): String? {
+        val it = rowCoords.entries.iterator()
+        var found: String? = null
+        while (it.hasNext()) {
+            val (path, c) = it.next()
+            if (!c.isAttached) { it.remove(); continue }
+            if (found == null && c.boundsInRoot().contains(rootPos)) found = path
+        }
+        return found
+    }
+
+    fun itemAt(rootPos: Offset): FileItem? = hit(rootPos)?.let { p -> currentItems.firstOrNull { it.path == p } }
+
+    /** Selección de rango (arrastre con clic derecho). */
+    fun selectRange(fromPath: String, toPath: String) {
+        val list = visibleItems
+        val a = list.indexOfFirst { it.path == fromPath }
+        val b = list.indexOfFirst { it.path == toPath }
+        if (a < 0 || b < 0) return
+        selection = list.subList(minOf(a, b), maxOf(a, b) + 1).mapTo(HashSet()) { it.path }
+        focused = list[b]
+    }
+
+    /** Datos para arrastrar a otras apps (archivos) o a otro panel (rutas). */
+    fun dragData(item: FileItem): Pair<ClipData, DragPayload> {
+        val items = if (item.path in selection) selectedItems() else listOf(item)
+        val payload = DragPayload(items.map { it.path }, currentDir?.path)
+        val files = items.filter { !it.isDir }
+        val clip = if (files.isNotEmpty()) {
+            val uris = files.map { uriFor(it.path) }
+            ClipData.newUri(s.app.contentResolver, files[0].name, uris[0]).apply {
+                uris.drop(1).forEach { addItem(ClipData.Item(it)) }
+            }
+        } else ClipData.newPlainText(items[0].name, items.joinToString("\n") { it.path })
+        return clip to payload
+    }
+
+    private fun rootOf(path: String) = roots.firstOrNull { path == it.path || path.startsWith(it.path + "/") }?.path
+
+    /** Soltar elementos de este explorador: mueve en la misma unidad y copia entre unidades (como Windows). */
+    fun dropPaths(paths: List<String>, dest: File) {
+        val files = paths.map { File(it) }.filter { it.exists() && it.parentFile?.path != dest.path && it.path != dest.path }
+        if (files.isEmpty()) return
+        val move = rootOf(files[0].path) == rootOf(dest.path)
+        transfer(files, dest, move)
+    }
+
+    /** Soltar archivos que vienen de otra app. */
+    fun importUris(uris: List<Uri>, dest: File) {
+        if (uris.isEmpty()) return
+        val cr = s.app.contentResolver
+        s.runOp("Copiando ${uris.size} archivo(s)…") {
+            var n = 0
+            for (u in uris) {
+                val name = runCatching {
+                    cr.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                        if (c.moveToFirst()) c.getString(0) else null
+                    }
+                }.getOrNull() ?: u.lastPathSegment?.substringAfterLast('/') ?: "archivo"
+                val target = FileOps.uniqueChild(dest, name)
+                cr.openInputStream(u)?.use { input -> target.outputStream().use { input.copyTo(it) } } ?: continue
+                n++
+            }
+            "$n archivo(s) copiado(s) a «${dest.name}»"
+        }
+    }
+
+    fun newTextFile() {
+        val dir = currentDir ?: return
+        s.runOp("Creando documento…") {
+            val f = FileOps.uniqueChild(dir, "Nuevo documento de texto.txt")
+            f.createNewFile()
+            withContext(Dispatchers.Main) {
+                pendingSelect = f.path
+                s.openInEditor(f)
+            }
+            "Creado «${f.name}»"
+        }
     }
 
     fun openWith(item: FileItem) = launchView(item, chooser = true)
@@ -643,10 +747,17 @@ class ExplorerTab(val s: Shared) {
     }
 }
 
+data class DragPayload(val paths: List<String>, val sourceDir: String?)
+
 class Pane(first: ExplorerTab) {
     val tabs = mutableStateListOf(first)
     var active by mutableIntStateOf(0)
     val tab: ExplorerTab get() = tabs[active.coerceIn(0, tabs.lastIndex)]
+
+    /** Documentos abiertos en el editor integrado (pestañas a la derecha de las carpetas). */
+    val docs = mutableStateListOf<EditorDoc>()
+    var activeDoc by mutableStateOf<Int?>(null)
+    val doc: EditorDoc? get() = activeDoc?.let { docs.getOrNull(it) }
 }
 
 class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
@@ -677,6 +788,11 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         s.openInNewTab = { dir, sel -> newTab(pane, dir, sel) }
         s.openInOtherPane = { dir, sel -> openInOtherPane(dir, sel) }
         s.otherPaneDir = { otherPane?.tab?.currentDir }
+        s.openInEditor = { f -> openEditor(pane, f) }
+        s.isDual = { isDual }
+        s.transferToOther = { files, move ->
+            otherPane?.tab?.currentDir?.let { dest -> tab.transfer(files, dest, move) }
+        }
     }
 
     private fun allTabs() = panes.flatMap { it.tabs }
@@ -769,13 +885,58 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
         val t = ExplorerTab(s)
         target.tabs.add(target.active + 1, t)
         target.active += 1
+        target.activeDoc = null
         t.navigate(d, record = false, select = select)
         saveSession()
     }
 
     fun selectTab(target: Pane, i: Int) {
         target.active = i.coerceIn(0, target.tabs.lastIndex)
+        target.activeDoc = null
         saveSession()
+    }
+
+    // ---- Editor de texto integrado ----
+
+    val editorActive get() = pane.doc != null
+
+    fun openEditor(target: Pane, f: File) {
+        val existing = target.docs.indexOfFirst { it.file.path == f.path }
+        if (existing >= 0) { target.activeDoc = existing; return }
+        viewModelScope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (f.length() > 8L * 1024 * 1024) error("El archivo es demasiado grande para el editor (máx. 8 MB)")
+                    f.readText()
+                }
+            }
+            text.onSuccess {
+                target.docs.add(EditorDoc(f, it))
+                target.activeDoc = target.docs.lastIndex
+            }.onFailure { s.message = it.message ?: "No se pudo abrir «${f.name}»" }
+        }
+    }
+
+    fun selectDoc(target: Pane, i: Int) { target.activeDoc = i }
+
+    fun closeDoc(target: Pane, i: Int) {
+        if (i !in target.docs.indices) return
+        target.docs.removeAt(i)
+        val a = target.activeDoc
+        target.activeDoc = when {
+            a == null -> null
+            target.docs.isEmpty() -> null
+            a == i -> null
+            a > i -> a - 1
+            else -> a
+        }
+    }
+
+    fun saveDoc(d: EditorDoc): Boolean {
+        val ok = d.save()
+        s.message = if (ok) "Guardado «${d.name}»" else "No se pudo guardar «${d.name}»"
+        if (ok) s.onFsChanged()
+        return ok
     }
 
     fun closeTab(target: Pane, i: Int) {
