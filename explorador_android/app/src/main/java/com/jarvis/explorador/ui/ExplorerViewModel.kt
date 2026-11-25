@@ -72,7 +72,7 @@ class Shared(val app: Application, val scope: CoroutineScope) {
     // Editor de texto integrado
     var editorFont by mutableFloatStateOf(prefs.getFloat("editorFont", 14f)); private set
     var editorWrap by mutableStateOf(prefs.getBoolean("editorWrap", true)); private set
-    fun setEditorFont(v: Float) { editorFont = v.coerceIn(10f, 28f); save { putFloat("editorFont", editorFont) } }
+    fun changeEditorFont(v: Float) { editorFont = v.coerceIn(10f, 28f); save { putFloat("editorFont", editorFont) } }
     fun toggleEditorWrap() { editorWrap = !editorWrap; save { putBoolean("editorWrap", editorWrap) } }
 
     var roots: List<StorageRoot> = emptyList(); private set

@@ -713,8 +713,8 @@ private fun EditorCommandBar(vm: ExplorerViewModel, d: EditorDoc, dialog: (Dialo
         BarDivider()
         ToolButton(Icons.Filled.Search, "Buscar", true, active = d.findOpen) { d.findOpen = !d.findOpen }
         ToolButton(Icons.AutoMirrored.Filled.WrapText, "Ajuste de línea", true, active = s.editorWrap) { s.toggleEditorWrap() }
-        ToolButton(Icons.Filled.TextDecrease, "Letra más pequeña", false) { s.setEditorFont(s.editorFont - 1) }
-        ToolButton(Icons.Filled.TextIncrease, "Letra más grande", false) { s.setEditorFont(s.editorFont + 1) }
+        ToolButton(Icons.Filled.TextDecrease, "Letra más pequeña", false) { s.changeEditorFont(s.editorFont - 1) }
+        ToolButton(Icons.Filled.TextIncrease, "Letra más grande", false) { s.changeEditorFont(s.editorFont + 1) }
         BarDivider()
         ToolButton(Icons.Filled.Apps, "Abrir con…", true) { vm.tab.openWith(item) }
         ToolButton(Icons.Filled.Share, "Compartir", true) { vm.tab.share(listOf(item)) }
