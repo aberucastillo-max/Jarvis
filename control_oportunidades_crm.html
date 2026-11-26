@@ -2253,12 +2253,14 @@ function jvListen() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   const rec = new SRClass();
   JV.rec = rec; rec.lang = 'es-PE'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
-  let finalTxt = '';
+  let finalTxt = '', ultimoTxt = '', silencio = null;
   const input = document.getElementById('jvInput');
   rec.onresult = e => {
     const t = [...e.results].map(x => x[0].transcript).join('');
-    input.value = t;
+    input.value = t; ultimoTxt = t;
     if (e.results[e.results.length - 1].isFinal) finalTxt = t;
+    // Envío automático: si hay 1,5 s sin cambios, se termina la escucha y se envía
+    clearTimeout(silencio); silencio = setTimeout(() => { try { rec.stop(); } catch (er) {} }, 1500);
   };
   rec.onerror = e => {
     const msg = { 'not-allowed': 'Necesito permiso para usar el micrófono. Actívalo en el candado de la barra de direcciones.', 'service-not-allowed': 'El dictado no está disponible en esta página. Escribe tu pregunta.', 'no-speech': 'No escuché nada. Pulsa Hablar e inténtalo de nuevo.', 'network': 'El dictado necesita conexión a internet.' }[e.error];
@@ -2268,7 +2270,9 @@ function jvListen() {
     JV.listening = false;
     document.getElementById('jvMic').classList.remove('btn-primary');
     jvStatus('Listo');
-    if (finalTxt.trim()) { input.value = ''; jvAsk(finalTxt); }
+    clearTimeout(silencio);
+    const txt = (finalTxt || ultimoTxt).trim();   // se envía solo, sin pulsar Enviar
+    if (txt) { input.value = ''; jvAsk(txt); }
   };
   JV.listening = true;
   document.getElementById('jvMic').classList.add('btn-primary');
