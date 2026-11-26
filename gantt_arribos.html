@@ -6,7 +6,7 @@
 <title>Calendario ETD / ETA — CRM Agente de Carga</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  // Tema oscuro minimalista: grises neutros, paneles planos, verde como acción principal
+  // Tema oscuro minimalista: grises neutros + verde neón. Sin rojo ni azul; amarillo solo para lo crítico
   tailwind.config = { theme: { extend: {
     fontFamily: { sans: ['Manrope', 'system-ui', '-apple-system', 'sans-serif'] },
     colors: {
@@ -14,10 +14,10 @@
       slate:   { 50:'#222222', 100:'#262626', 200:'#2c2c2c', 300:'#3a3a3a', 400:'#6e6e6e', 500:'#8c8c8c', 600:'#b0b0b0', 700:'#d2d2d2', 800:'#ededed', 900:'#0f0f0f' },
       sky:     { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
       emerald: { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
-      amber:   { 50:'#29230f', 100:'#322a11', 200:'#4d4016', 300:'#ffd84d', 400:'#f5c518', 500:'#e0b20f', 600:'#f5c518', 700:'#f5c518', 800:'#ffe08a' },
-      red:     { 50:'#2a1617', 100:'#361b1c', 200:'#552628', 300:'#ff9b9b', 400:'#ff6b6b', 500:'#ff5c5c', 600:'#ff6b6b', 700:'#ff7b7b', 800:'#ffb3b3' },
-      violet:  { 50:'#141f30', 100:'#182841', 200:'#20375c', 300:'#8bbcff', 400:'#5aa0ff', 500:'#3b8bff', 600:'#5aa0ff', 700:'#8bbcff', 800:'#bcd8ff' },
-      orange:  { 100:'#33240f', 300:'#ffb366', 700:'#ffb366' },
+      amber:   { 50:'#1f1f1f', 100:'#2a2a2a', 200:'#3a3a3a', 300:'#e5e5e5', 400:'#d9d9d9', 500:'#bdbdbd', 600:'#d9d9d9', 700:'#ededed', 800:'#f5f5f5' },  // énfasis neutro
+      red:     { 50:'#29230f', 100:'#322a11', 200:'#4d4016', 300:'#ffd84d', 400:'#f5c518', 500:'#f5c518', 600:'#f5c518', 700:'#f5c518', 800:'#ffe08a' },  // amarillo: solo crítico
+      violet:  { 50:'#1f1f1f', 100:'#2a2a2a', 200:'#3a3a3a', 300:'#b0b0b0', 400:'#9a9a9a', 500:'#8c8c8c', 600:'#9a9a9a', 700:'#b0b0b0', 800:'#d2d2d2' },  // gris
+      orange:  { 100:'#2a2a2a', 300:'#d2d2d2', 700:'#d2d2d2' },
     }
   } } };
 </script>
@@ -140,7 +140,7 @@
     <div class="px-4 py-3 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-x-6 gap-y-1">
       <span>Barra = ETD → ETA, color según la etapa</span>
       <span><span class="text-violet-600">┅</span> arribada esperando pago del cliente · <span class="text-amber-600">━</span> cliente pagó, comisión por cobrar</span>
-      <span>○ pago del cliente · <span class="text-emerald-600">●</span> comisión cobrada · <span class="text-red-600">│</span> fecha de corte</span>
+      <span>○ pago del cliente · <span class="text-emerald-600">●</span> comisión cobrada · <span class="text-emerald-600">│</span> fecha de corte</span>
       <span>Click en una fila para abrir el RO en el CRM</span>
     </div>
   </section>
@@ -282,8 +282,8 @@ function cobroInfo(r) {
 // ---- Etapa de la operación (solo ETD / ETA + cobro) ----
 const ETAPAS = ['Por zarpar', 'En tránsito', 'Arribada · espera pago cliente', 'Lista para cobrar comisión', 'Comisión cobrada'];
 const ETAPA_COLORS = {
-  'Por zarpar':'#4a4a4a', 'En tránsito':'#d2d2d2', 'Arribada · espera pago cliente':'#5aa0ff',
-  'Lista para cobrar comisión':'#f5c518', 'Comisión cobrada':'#00d26a'
+  'Por zarpar':'#3a3a3a', 'En tránsito':'#6e6e6e', 'Arribada · espera pago cliente':'#a8a8a8',
+  'Lista para cobrar comisión':'#ededed', 'Comisión cobrada':'#00d26a'
 };
 function etapa(r) {
   const c = cobroInfo(r);
@@ -689,7 +689,7 @@ function render() {
     days += `<div class="g-day text-[10px] text-slate-500 py-1 ${we ? 'g-weekend' : ''}" style="width:${dayW}px">${d.getDate()}</div>`;
     if (we) bg += `<div class="absolute top-0 bottom-0 g-weekend" style="left:${k * dayW}px;width:${dayW}px"></div>`;
   }
-  const corteLine = `<div class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-[3]" style="left:${x(corte) + dayW / 2}px" title="Fecha de corte ${fmtDate(corte)}"></div>`;
+  const corteLine = `<div class="absolute top-0 bottom-0 w-0.5 bg-emerald-500 corte-line z-[3]" style="left:${x(corte) + dayW / 2}px" title="Fecha de corte ${fmtDate(corte)}"></div>`;
 
   const body = rows.map(({ r, i }) => {
     const color = ETAPA_COLORS[i.et];
@@ -776,7 +776,7 @@ renderLegend();
   applySessionUI();
   setDefaultCorte();
   render();
-  const g = document.getElementById('gantt'); const line = g.querySelector('.bg-red-500');
+  const g = document.getElementById('gantt'); const line = g.querySelector('.corte-line');
   if (line) g.scrollLeft = Math.max(0, LEFT_W + line.offsetLeft - g.clientWidth / 2);
 })();
 </script>

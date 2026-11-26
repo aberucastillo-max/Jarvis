@@ -6,7 +6,7 @@
 <title>Control de Oportunidades — CRM Agente de Carga</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  // Tema oscuro minimalista: grises neutros, paneles planos, verde como acción principal
+  // Tema oscuro minimalista: grises neutros + verde neón. Sin rojo ni azul; amarillo solo para lo crítico
   tailwind.config = { theme: { extend: {
     fontFamily: { sans: ['Manrope', 'system-ui', '-apple-system', 'sans-serif'] },
     colors: {
@@ -14,10 +14,10 @@
       slate:   { 50:'#222222', 100:'#262626', 200:'#2c2c2c', 300:'#3a3a3a', 400:'#6e6e6e', 500:'#8c8c8c', 600:'#b0b0b0', 700:'#d2d2d2', 800:'#ededed', 900:'#0f0f0f' },
       sky:     { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
       emerald: { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
-      amber:   { 50:'#29230f', 100:'#322a11', 200:'#4d4016', 300:'#ffd84d', 400:'#f5c518', 500:'#e0b20f', 600:'#f5c518', 700:'#f5c518', 800:'#ffe08a' },
-      red:     { 50:'#2a1617', 100:'#361b1c', 200:'#552628', 300:'#ff9b9b', 400:'#ff6b6b', 500:'#ff5c5c', 600:'#ff6b6b', 700:'#ff7b7b', 800:'#ffb3b3' },
-      violet:  { 50:'#141f30', 100:'#182841', 200:'#20375c', 300:'#8bbcff', 400:'#5aa0ff', 500:'#3b8bff', 600:'#5aa0ff', 700:'#8bbcff', 800:'#bcd8ff' },
-      orange:  { 100:'#33240f', 300:'#ffb366', 700:'#ffb366' },
+      amber:   { 50:'#1f1f1f', 100:'#2a2a2a', 200:'#3a3a3a', 300:'#e5e5e5', 400:'#d9d9d9', 500:'#bdbdbd', 600:'#d9d9d9', 700:'#ededed', 800:'#f5f5f5' },  // énfasis neutro
+      red:     { 50:'#29230f', 100:'#322a11', 200:'#4d4016', 300:'#ffd84d', 400:'#f5c518', 500:'#f5c518', 600:'#f5c518', 700:'#f5c518', 800:'#ffe08a' },  // amarillo: solo crítico
+      violet:  { 50:'#1f1f1f', 100:'#2a2a2a', 200:'#3a3a3a', 300:'#b0b0b0', 400:'#9a9a9a', 500:'#8c8c8c', 600:'#9a9a9a', 700:'#b0b0b0', 800:'#d2d2d2' },  // gris
+      orange:  { 100:'#2a2a2a', 300:'#d2d2d2', 700:'#d2d2d2' },
     }
   } } };
 </script>
@@ -205,7 +205,7 @@
       <h4 class="text-sm font-semibold text-slate-700">Datos faltantes</h4>
       <span id="faltaCount" class="text-xs rounded-full bg-red-50 text-red-700 px-2.5 py-1 whitespace-nowrap">0</span>
     </div>
-    <p class="text-xs text-slate-500 mb-3"><span class="text-red-600 font-medium">Rojo</span>: obligatorio (nunca vacío). <span class="text-amber-700 font-medium">Ámbar</span>: importante.</p>
+    <p class="text-xs text-slate-500 mb-3"><span class="text-red-600 font-medium">Amarillo</span>: obligatorio (nunca vacío). <span class="text-slate-700 font-medium">Gris</span>: importante.</p>
     <ul id="listFaltantes" class="space-y-2 max-h-80 overflow-y-auto"></ul>
   </section>
 </aside>
@@ -297,7 +297,7 @@
     </div>
     <div class="px-4 py-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
       <span id="footerCount">Mostrando 0 oportunidades</span>
-      <span>🚦 rojo: falta dato obligatorio o comisión lista &gt; 30 días · ámbar: falta dato importante, comisión por cobrar o cliente sin pagar &gt; 30 días desde ETA ·
+      <span>Semáforo · <span class="text-red-600">amarillo</span>: falta dato obligatorio o comisión lista &gt; 30 días · gris claro: falta dato importante, comisión por cobrar o cliente sin pagar &gt; 30 días desde ETA · verde: en orden ·
         <button type="button" onclick="restoreSample()" class="underline hover:text-slate-700">Restablecer datos de ejemplo</button></span>
     </div>
   </section>
@@ -603,8 +603,8 @@ function cobroInfo(r) {
 // ---- Etapa de la operación (solo ETD / ETA + cobro) ----
 const ETAPAS = ['Por zarpar', 'En tránsito', 'Arribada · espera pago cliente', 'Lista para cobrar comisión', 'Comisión cobrada'];
 const ETAPA_COLORS = {
-  'Por zarpar':'#4a4a4a', 'En tránsito':'#d2d2d2', 'Arribada · espera pago cliente':'#5aa0ff',
-  'Lista para cobrar comisión':'#f5c518', 'Comisión cobrada':'#00d26a'
+  'Por zarpar':'#3a3a3a', 'En tránsito':'#6e6e6e', 'Arribada · espera pago cliente':'#a8a8a8',
+  'Lista para cobrar comisión':'#ededed', 'Comisión cobrada':'#00d26a'
 };
 function etapa(r) {
   const c = cobroInfo(r);
@@ -919,9 +919,9 @@ const COBRO_BADGE = {
 const SEGURO_BADGE = { 'APLICA':'bg-sky-100 text-sky-700', 'NO APLICA':'bg-slate-100 text-slate-600' };
 const ESTADO_BADGE = {
   ABIERTA:'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300',
-  CERRADA:'bg-red-100 text-red-700 ring-1 ring-red-300',
+  CERRADA:'bg-slate-100 text-slate-600 ring-1 ring-slate-300',
   GANADA:'bg-sky-100 text-sky-700 ring-1 ring-sky-300',
-  PERDIDA:'bg-slate-200 text-slate-700 ring-1 ring-slate-300'
+  PERDIDA:'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
 };
 const canEdit = () => !(IS_GAS && SESSION && SESSION.rol === 'lector');
 const sum = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
@@ -951,7 +951,7 @@ const TABLE_COLS = [
   { key:'cobro',         label:'Cobro',         filter:'select', value: r => cobroInfo(r).estado },
   { key:'seguroAplica',  label:'Seguro',        filter:'select' },
   { key:'prioridad',     label:'Prioridad',     filter:'select', align:'center', value: r => r.prioridad ? 'Alta' : 'Normal' },
-  { key:'sem',           label:'🚦',            filter:'select', align:'center', value: r => calcSem(r), optLabel: k => ({ verde:'Verde', ambar:'Ámbar', rojo:'Rojo' }[k] || k) },
+  { key:'sem',           label:'🚦',            filter:'select', align:'center', value: r => calcSem(r), optLabel: k => ({ verde:'En orden', ambar:'Atención', rojo:'Crítico' }[k] || k) },
 ];
 const colValue = (c, r) => c.value ? c.value(r) : (isBlank(r[c.key]) ? VACIO : String(r[c.key]));
 const FILTERS = {};
