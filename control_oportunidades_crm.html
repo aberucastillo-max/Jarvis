@@ -322,27 +322,7 @@
   </section>
 
   <!-- BD CLIENTES -->
-  <section data-view="clientes" class="hidden space-y-4">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Clientes en BD</p><p id="ckTotal" class="text-xl font-semibold mt-0.5">0</p><p id="ckTotalSub" class="text-xs text-slate-500 mt-1"></p></div>
-      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Con operaciones</p><p id="ckActivos" class="text-xl font-semibold mt-0.5">0</p><p id="ckActivosSub" class="text-xs text-slate-500 mt-1"></p></div>
-      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Semana actual</p><p id="ckSemana" class="text-xl font-semibold mt-0.5">0</p><p id="ckSemanaSub" class="text-xs text-slate-500 mt-1"></p></div>
-      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Sin ficha en BD</p><p id="ckSinFicha" class="text-xl font-semibold mt-0.5 text-amber-700">0</p><p class="text-xs text-slate-500 mt-1">consignatarios con RO</p></div>
-    </div>
-
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-      <div class="bg-card rounded-xl card p-4 xl:col-span-2">
-        <h3 class="text-sm font-semibold text-slate-700 mb-1">Ranking de clientes por comisión</h3>
-        <p class="text-[11px] text-slate-500 mb-3"><span class="inline-block w-2 h-2 rounded-sm bg-emerald-500"></span> cobrada · <span class="inline-block w-2 h-2 rounded-sm bg-amber-400"></span> por cobrar · click para ver la ficha</p>
-        <div id="chartClientes" class="space-y-2.5"></div>
-      </div>
-      <div class="bg-card rounded-xl card p-4">
-        <h3 class="text-sm font-semibold text-slate-700 mb-1">Consignatarios sin ficha</h3>
-        <p class="text-[11px] text-slate-500 mb-3">Tienen RO pero no están en la BD de clientes</p>
-        <ul id="listSinFicha" class="space-y-2 max-h-80 overflow-y-auto"></ul>
-      </div>
-    </div>
-
+  <section data-view="clientes" class="hidden grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
     <div class="bg-card rounded-xl card overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-sm">
         <div class="flex items-center gap-3"><h3 class="font-semibold text-slate-800">BD Clientes</h3><span id="cliCount" class="text-xs text-slate-500"></span></div>
@@ -352,13 +332,26 @@
           <button type="button" onclick="clearCliFilters()" class="text-xs text-sky-700 hover:underline px-2">Limpiar filtros</button>
         </div>
       </div>
-      <div class="overflow-auto max-h-[70vh]">
+      <div class="overflow-auto max-h-[78vh]">
         <table class="w-full text-sm">
           <thead id="theadCli" class="sticky-head text-slate-500 text-xs uppercase tracking-wide"></thead>
           <tbody id="tbodyCli" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
     </div>
+    <div class="space-y-4 xl:sticky xl:top-4">
+      <div class="bg-card rounded-xl card p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-1">Ranking de clientes por comisión</h3>
+        <p class="text-[11px] text-slate-500 mb-3"><span class="inline-block w-2 h-2 rounded-sm bg-emerald-500"></span> cobrada · <span class="inline-block w-2 h-2 rounded-sm bg-amber-400"></span> por cobrar · click para ver la ficha</p>
+        <div id="chartClientes" class="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1"></div>
+      </div>
+      <div class="bg-card rounded-xl card p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-1">Consignatarios sin ficha</h3>
+        <p class="text-[11px] text-slate-500 mb-3">Tienen RO pero no están en la BD de clientes</p>
+        <ul id="listSinFicha" class="space-y-2 max-h-80 overflow-y-auto"></ul>
+      </div>
+    </div>
+
   </section>
 </main>
 </div>
@@ -1680,16 +1673,7 @@ function renderClientes() {
       <td class="px-3 py-2"><div class="flex items-center justify-end gap-1">${contactBtns(c)}</div></td>
     </tr>`).join('') || '<tr><td colspan="11" class="px-4 py-4 text-center text-sm text-slate-400">No hay clientes con estos filtros.</td></tr>';
 
-  // Totalizadores
-  const all = CLIENTES.map(c => statsCliente(c.empresa));
-  const set = (id, v) => document.getElementById(id).textContent = v;
-  set('ckTotal', CLIENTES.length);
-  set('ckTotalSub', `${CLIENTES.filter(c => !c.celular && !c.correo).length} sin celular ni correo`);
-  set('ckActivos', all.filter(s => s.n).length);
-  set('ckActivosSub', `${fmt$(sum(all, s => s.com))} en comisiones`);
-  set('ckSemana', CLIENTES.filter(c => String(c.semana) === String(semana)).length);
-  set('ckSemanaSub', `clientes en la semana ${semana}`);
-
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   // Ranking por comisión
   const rank = CLIENTES.map(c => ({ c, s: statsCliente(c.empresa) })).filter(x => x.s.com > 0).sort((a, b) => b.s.com - a.s.com).slice(0, 10);
   const max = Math.max(1, ...rank.map(x => x.s.com));
