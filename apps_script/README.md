@@ -7,8 +7,9 @@ Un **Google Apps Script** pegado dentro de esa hoja publica las dos páginas (CR
 Google Sheet (Drive)                    Apps Script (dentro de la hoja)            Navegador / celular
 ┌─────────────────────┐   lee/escribe   ┌──────────────────────────────┐   URL    ┌────────────────────┐
 │ Oportunidades       │ ◄─────────────► │ Code.gs  (login + datos)     │ ◄──────► │ Login → CRM        │
-│ Usuarios (hash)     │                 │ Index    (CRM)               │          │        → Calendario│
-│ Config (PrimaMinima)│                 │ Gantt    (Calendario)        │          └────────────────────┘
+│ Clientes            │                 │ Index    (CRM)               │          │        → Calendario│
+│ Usuarios (hash)     │                 │ Gantt    (Calendario)        │          └────────────────────┘
+│ Config (PrimaMinima)│                 │                              │
 └─────────────────────┘                 └──────────────────────────────┘
 ```
 
@@ -17,7 +18,19 @@ Google Sheet (Drive)                    Apps Script (dentro de la hoja)         
 Abre la hoja **"CRM Oportunidades"** en tu Google Drive.
 Si no la tienes, sube `plantilla_oportunidades.xlsx` a Drive y ábrela con Google Sheets (Archivo → Guardar como Hojas de cálculo de Google).
 
-Debe tener tres pestañas: **Oportunidades**, **Usuarios** y **Config**.
+Pestañas: **Oportunidades**, **Clientes**, **Usuarios** y **Config**.
+
+**Oportunidades** usa las 16 columnas de tu Excel de alimentación, en el mismo orden:
+`BROKER · COMISION PROPIA · OBSERVACION · SEGURO. · RO · CIERRE · VALIDEZ · SERVICIO · CONSIGNATARIO · REF CLIENTE/PROVEEDOR · AGENTE/COLOAD · RUTA · ETD · ETA · CANTIDAD · NAVIERA`
+
+- Nunca en blanco: RO, CIERRE, SERVICIO, CONSIGNATARIO, REF CLIENTE/PROVEEDOR, AGENTE/COLOAD, RUTA, ETD, ETA (el servidor rechaza un RO nuevo sin ellos).
+- Importantes (aviso, no bloquean): BROKER, COMISION PROPIA, SEGURO. (APLICA / NO APLICA).
+- A la derecha, columnas que gestiona el CRM: Estado, Prioridad, Seguro prima USD, **Pago cliente**, **Comisión cobrada USD**, **Fecha cobro comisión**, Alertas.
+  La comisión queda *lista para cobrar* cuando hay fecha de **Pago cliente**.
+
+**Clientes**: `EMPRESA · CONTACTO · CELULAR · CORREO · DIRECCION · DISTRITO · SEMANA`. Las estadísticas por cliente (RO, rutas, comisiones) se calculan cruzando EMPRESA con CONSIGNATARIO.
+
+> Si tu hoja de Google es de una versión anterior (con columnas Consignatario, Ruta… en otro orden o con hitos de carga), crea una hoja nueva a partir de `plantilla_oportunidades.xlsx`: *Preparar hojas* agrega las columnas que falten, pero no borra ni reordena las antiguas.
 
 ## 2. Pegar el código
 
@@ -53,7 +66,9 @@ Debe tener tres pestañas: **Oportunidades**, **Usuarios** y **Config**.
 | Qué | Cómo |
 |---|---|
 | Registrar un RO nuevo | Botón **＋ Nuevo RO** → completa la ventana de registro → *Registrar RO*. Se agrega una fila en la hoja. |
-| Avanzar el timeline | Abre el RO → **✏️ Editar** → pon la fecha del hito cumplido (Gate-in, Loaded, In transit…). También puedes escribir la fecha directo en la hoja. |
+| Cobro de comisión | Panel *Comisiones por cobrar* (o el detalle del RO) → registra la fecha de **pago del cliente** y luego el **cobro**. |
+| Clientes | Pestaña **Clientes**: alta/edición, llamar, WhatsApp o correo con un toque, y ficha con estadísticas (RO, rutas, comisiones). |
+| Filtros | Cada columna de la tabla de operaciones y de clientes tiene su filtro en el encabezado; se aplica al escribir. |
 | Prioridad, seguro, prima mínima | Se guardan en la hoja al cambiarlos en pantalla. La prima mínima es la misma para todos (pestaña Config). |
 | Ver la hoja | El admin tiene el botón **Abrir Google Sheet** en la cabecera. |
 | Calendario | Botón **📅 Calendario de arribos**: usa los mismos datos y la misma sesión. |

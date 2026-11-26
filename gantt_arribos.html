@@ -3,40 +3,84 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Calendario de Arribos — CRM Agente de Carga</title>
+<title>Calendario ETD / ETA — CRM Agente de Carga</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Tema oscuro minimalista: grises neutros, paneles planos, verde como acción principal
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Manrope', 'system-ui', '-apple-system', 'sans-serif'] },
+    colors: {
+      card: '#1c1c1c', field: '#242424',
+      slate:   { 50:'#222222', 100:'#262626', 200:'#2c2c2c', 300:'#3a3a3a', 400:'#6e6e6e', 500:'#8c8c8c', 600:'#b0b0b0', 700:'#d2d2d2', 800:'#ededed', 900:'#0f0f0f' },
+      sky:     { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
+      emerald: { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
+      amber:   { 50:'#29230f', 100:'#322a11', 200:'#4d4016', 300:'#ffd84d', 400:'#f5c518', 500:'#e0b20f', 600:'#f5c518', 700:'#f5c518', 800:'#ffe08a' },
+      red:     { 50:'#2a1617', 100:'#361b1c', 200:'#552628', 300:'#ff9b9b', 400:'#ff6b6b', 500:'#ff5c5c', 600:'#ff6b6b', 700:'#ff7b7b', 800:'#ffb3b3' },
+      violet:  { 50:'#141f30', 100:'#182841', 200:'#20375c', 300:'#8bbcff', 400:'#5aa0ff', 500:'#3b8bff', 600:'#5aa0ff', 700:'#8bbcff', 800:'#bcd8ff' },
+      orange:  { 100:'#33240f', 300:'#ffb366', 700:'#ffb366' },
+    }
+  } } };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html { font-size: 14px; }
+  body { font-family: 'Manrope', system-ui, -apple-system, sans-serif; background: #121212 !important; }
+  .card { border: 1px solid #262626; }
+  .btn-primary { background: #00d26a; color: #0d0d0d; font-weight: 600; }
+  .btn-primary:hover { background: #22dd7a; }
+  .row-hover:hover { background: #222222; cursor: pointer; }
+  .bar { transition: width .5s ease; }
+  .fade-in { animation: fadeIn .15s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(3px);} to {opacity:1; transform:none;} }
+  .modal-open { overflow: hidden; }
+  select, input, textarea { outline: none; }
+  input:not([type=checkbox]):not([type=file]), select, textarea { background-color: #242424 !important; color: #ededed; border: 1px solid #2c2c2c !important; }
+  input::placeholder, textarea::placeholder { color: #6e6e6e; }
+  input:focus, select:focus, textarea:focus { border-color: #00d26a !important; }
+  input[type=checkbox] { accent-color: #00d26a; }
+  button { border-radius: 9999px; }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+  .th-filter { width: 100%; min-width: 64px; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0;
+               border-radius: 6px; padding: 3px 8px; }
+  .th-filter.active { border-color: #00d26a !important; }
+  thead.sticky-head th { position: sticky; top: 0; z-index: 2; }
+  .nav-pill { color: #8c8c8c; }
+  .nav-pill.active { background: #ececec; color: #121212; }
+  .nav-pill:not(.active):hover { color: #ededed; }
+  .bnav-item { color: #6e6e6e; }
+  .bnav-item.active { color: #00d26a; }
+  .bnav-item.active .bnav-ico { background: #13261b; }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-  .card { box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
-  ::-webkit-scrollbar { height: 8px; width: 8px; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-  .g-wrap { position: relative; }
-  .g-left { position: sticky; left: 0; z-index: 5; background: #fff; }
-  .g-head .g-left { z-index: 7; background: #f8fafc; }
-  .g-head { position: sticky; top: 0; z-index: 6; background: #f8fafc; }
-  .g-day { flex: 0 0 auto; text-align: center; border-left: 1px solid #f1f5f9; }
-  .g-weekend { background: rgba(148,163,184,.10); }
-  .g-plan { background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.18) 0 6px, rgba(100,116,139,.06) 6px 12px); border: 1px dashed #94a3b8; }
-  .g-row:hover .g-left, .g-row:hover .g-track { background-color: #f8fafc; }
+  .g-left { position: sticky; left: 0; z-index: 5; background: #1c1c1c; }
+  .g-head { position: sticky; top: 0; z-index: 6; background: #222222; }
+  .g-head .g-left { z-index: 7; background: #222222; }
+  .g-day { flex: 0 0 auto; text-align: center; border-left: 1px solid #232323; }
+  .g-weekend { background: rgba(255,255,255,.02); }
   .g-row { cursor: pointer; }
-  select, input { outline: none; }
+  .g-row:hover .g-left, .g-row:hover .g-track { background-color: #222222; }
+  .g-wait { background-image: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px); height: 4px; border-radius: 4px; }
 </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen">
+<body class="bg-slate-100 text-slate-800 min-h-screen pb-24 lg:pb-0">
 
-<header class="bg-slate-900 text-white">
-  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
+<header class="bg-slate-900 text-white border-b border-slate-200">
+  <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-xl">📅</div>
+      <div class="w-9 h-9 rounded-lg btn-primary flex items-center justify-center text-[11px] font-bold tracking-tight">ETA</div>
       <div>
-        <h1 class="text-lg font-semibold leading-tight">Calendario de Arribos</h1>
-        <p class="text-xs text-slate-400">Timeline tipo Gantt · ETD → ETA · <span id="modeBadge" class="text-sky-300">Cargando…</span></p>
+        <h1 class="text-lg font-semibold leading-tight">Calendario ETD / ETA</h1>
+        <p class="text-xs text-slate-400">Zarpe → arribo → pago del cliente → cobro de comisión · <span id="modeBadge" class="text-sky-300">Cargando…</span></p>
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a href="control_oportunidades_crm.html" onclick="goTo(pageUrl('crm')); return false;" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">← Volver al CRM</a>
-      <label id="btnImport" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
+      <a href="control_oportunidades_crm.html" onclick="goTo(pageUrl('crm')); return false;" class="text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">← Volver al CRM</a>
+      <label id="btnImport" class="text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10 cursor-pointer">
         Importar Excel<input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelImport(this)">
       </label>
       <div id="userAvatar" class="hidden"></div>
@@ -45,125 +89,138 @@
   </div>
 </header>
 
-<main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+<main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
   <div id="importFeedback" class="hidden rounded-lg px-4 py-2 text-sm"></div>
 
   <!-- CONTROLES -->
-  <section class="bg-white rounded-xl card p-4 flex flex-wrap items-end gap-3">
+  <section class="bg-card rounded-xl card p-4 flex flex-wrap items-end gap-3">
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Fecha de corte</label>
-      <input id="fCorte" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+      <input id="fCorte" type="date" class="border rounded-full px-3 py-2 text-sm">
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">"Pronto a arribar" = ETA en ≤</label>
-      <select id="fVentana" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+      <select id="fVentana" class="border rounded-full px-3 py-2 text-sm">
         <option value="3">3 días</option><option value="7" selected>7 días</option><option value="15">15 días</option><option value="30">30 días</option>
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-slate-500 mb-1">Estado timeline</label>
-      <select id="fHito" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]"><option value="">Todos</option></select>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Etapa</label>
+      <select id="fEtapa" class="border rounded-full px-3 py-2 text-sm min-w-[200px]"><option value="">Todas</option></select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-slate-500 mb-1">Oportunidad</label>
-      <select id="fEstado" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
-        <option value="">Todas</option><option>ABIERTA</option><option>CERRADA</option><option>GANADA</option><option>PERDIDA</option>
-      </select>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Buscar</label>
+      <input id="fTexto" type="search" placeholder="RO, cliente, ruta…" class="border rounded-full px-3 py-2 text-sm">
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Zoom</label>
-      <select id="fZoom" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
-        <option value="20">Compacto</option><option value="30" selected>Normal</option><option value="44">Amplio</option>
+      <select id="fZoom" class="border rounded-full px-3 py-2 text-sm">
+        <option value="16">Compacto</option><option value="26" selected>Normal</option><option value="40">Amplio</option>
       </select>
     </div>
     <p id="corteNote" class="text-xs text-slate-500 basis-full"></p>
   </section>
 
   <!-- RESUMEN -->
-  <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-    <div class="bg-white rounded-xl card p-4 border-l-4 border-amber-500">
-      <p class="text-xs font-medium text-slate-500">Pronto a arribar</p>
-      <p id="kProximos" class="text-2xl font-semibold mt-1">0</p>
-      <p id="kProximosSub" class="text-xs text-slate-500 mt-1">ETA en los próximos 7 días</p>
-    </div>
-    <div class="bg-white rounded-xl card p-4 border-l-4 border-blue-600">
-      <p class="text-xs font-medium text-slate-500">En tránsito</p>
-      <p id="kTransito" class="text-2xl font-semibold mt-1">0</p>
-      <p class="text-xs text-slate-500 mt-1">estado "In transit"</p>
-    </div>
-    <div class="bg-white rounded-xl card p-4 border-l-4 border-red-500">
-      <p class="text-xs font-medium text-slate-500">ETA superada sin descarga</p>
-      <p id="kVencidas" class="text-2xl font-semibold mt-1">0</p>
-      <p class="text-xs text-slate-500 mt-1">revisar con la naviera</p>
-    </div>
-    <div class="bg-white rounded-xl card p-4 border-l-4 border-emerald-500">
-      <p class="text-xs font-medium text-slate-500">Entregadas</p>
-      <p id="kEntregadas" class="text-2xl font-semibold mt-1">0</p>
-      <p class="text-xs text-slate-500 mt-1">estado "Delivered"</p>
-    </div>
+  <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Por zarpar</p><p id="kZarpar" class="text-xl font-semibold mt-0.5">0</p><p class="text-xs text-slate-500 mt-1">antes del ETD</p></div>
+    <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">En tránsito</p><p id="kTransito" class="text-xl font-semibold mt-0.5 text-sky-700">0</p><p class="text-xs text-slate-500 mt-1">entre ETD y ETA</p></div>
+    <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Pronto a arribar</p><p id="kProximos" class="text-xl font-semibold mt-0.5">0</p><p id="kProximosSub" class="text-xs text-slate-500 mt-1">ETA en 7 días</p></div>
+    <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Arribadas · espera pago</p><p id="kEspera" class="text-xl font-semibold mt-0.5 text-violet-700">0</p><p id="kEsperaSub" class="text-xs text-slate-500 mt-1"></p></div>
+    <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Lista para cobrar</p><p id="kLista" class="text-xl font-semibold mt-0.5 text-amber-700">$0</p><p id="kListaSub" class="text-xs text-slate-500 mt-1"></p></div>
   </section>
 
   <!-- GANTT -->
-  <section class="bg-white rounded-xl card overflow-hidden">
-    <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-      <h3 class="text-sm font-semibold text-slate-800">Timeline de embarques</h3>
+  <section class="bg-card rounded-xl card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-sm font-semibold text-slate-800">Timeline de operaciones</h3>
       <div id="legend" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600"></div>
     </div>
     <div id="gantt" class="overflow-auto max-h-[70vh]"></div>
-    <div class="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 flex flex-wrap gap-x-6 gap-y-1">
-      <span>Barra de color = hitos cumplidos (cada tramo con el color del estado) · Tramo rayado = recorrido pendiente hasta ETA</span>
-      <span>▲ ETD · 🏁 ETA · <span class="text-red-600 font-medium">│</span> fecha de corte</span>
-      <span>Click en una carga para abrir su detalle en el CRM</span>
+    <div class="px-4 py-3 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-x-6 gap-y-1">
+      <span>Barra = ETD → ETA, color según la etapa</span>
+      <span><span class="text-violet-600">┅</span> arribada esperando pago del cliente · <span class="text-amber-600">━</span> cliente pagó, comisión por cobrar</span>
+      <span>○ pago del cliente · <span class="text-emerald-600">●</span> comisión cobrada · <span class="text-red-600">│</span> fecha de corte</span>
+      <span>Click en una fila para abrir el RO en el CRM</span>
     </div>
   </section>
 </main>
 
+<nav class="lg:hidden fixed bottom-3 inset-x-3 z-40 bg-card card rounded-xl px-2 py-2 flex justify-around">
+  <button type="button" class="bnav-item flex flex-col items-center gap-0.5 text-[10px]" onclick="goTo(pageUrl('crm'))"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center">🏠</span>CRM</button>
+  <button type="button" class="bnav-item active flex flex-col items-center gap-0.5 text-[10px]"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center">📅</span>ETD/ETA</button>
+</nav>
+
 <script>
 // ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
-const MILESTONES = ['Booking confirmado','Gate-in','Loaded','In transit','Discharged','Delivered'];
-const MILESTONE_COLORS = {
-  'Sin booking':'#cbd5e1', 'Booking confirmado':'#94a3b8', 'Gate-in':'#8b5cf6', 'Loaded':'#0ea5e9',
-  'In transit':'#2563eb', 'Discharged':'#f59e0b', 'Delivered':'#10b981'
-};
-const STORAGE_KEY = 'crm_oportunidades_data_v1';
+const STORAGE_KEY = 'crm_oportunidades_data_v3';
 
-// [clave interna, encabezado en Excel, tipo]
-const EXCEL_COLUMNS = [
-  ['ro','RO','text'], ['consignatario','Consignatario','text'], ['ruta','Ruta','text'], ['servicio','Servicio','text'],
-  ['naviera','Naviera','text'], ['etd','ETD','date'], ['eta','ETA','date'], ['estado','Estado','estado'],
-  ['prioridad','Prioridad','prioridad'], ['sem','Semáforo','sem'], ['pendiente','Pendiente USD','num'],
-  ['broker','Broker','text'], ['comision','Comisión USD','num'], ['seguro','Seguro prima USD','num'],
-  ['seguroEstado','Estado seguro','seguroEstado'], ['cierre','Cierre','date'], ['validez','Validez','date'],
-  ['agente','Agente/Coload','text'], ['ref','Ref cliente','text'],
-  ...MILESTONES.map(m => ['hito:' + m, m, 'date']),
-  ['alertas','Alertas','alertas'],
+// Excel de alimentación: [clave interna, encabezado EXACTO en el Excel, tipo, nivel, alias aceptados al importar]
+//   nivel: 'obligatorio' = nunca vacío · 'importante' = importante pero no siempre tiene · '' = no importante
+const FEED_COLUMNS = [
+  ['broker',        'BROKER',                'text',   'importante',  ['Broker']],
+  ['comision',      'COMISION PROPIA',       'num',    'importante',  ['Comisión USD', 'Comision', 'Comisión propia']],
+  ['observacion',   'OBSERVACION',           'text',   '',            ['Observaciones', 'Observación']],
+  ['seguroAplica',  'SEGURO.',               'seguro', 'importante',  ['Seguro', 'Estado seguro']],
+  ['ro',            'RO',                    'text',   'obligatorio', []],
+  ['cierre',        'CIERRE',                'date',   'obligatorio', []],
+  ['validez',       'VALIDEZ',               'date',   '',            []],
+  ['servicio',      'SERVICIO',              'text',   'obligatorio', []],
+  ['consignatario', 'CONSIGNATARIO',         'text',   'obligatorio', []],
+  ['ref',           'REF CLIENTE/PROVEEDOR', 'text',   'obligatorio', ['Ref cliente', 'Ref']],
+  ['agente',        'AGENTE/COLOAD',         'text',   'obligatorio', []],
+  ['ruta',          'RUTA',                  'text',   'obligatorio', []],
+  ['etd',           'ETD',                   'date',   'obligatorio', []],
+  ['eta',           'ETA',                   'date',   'obligatorio', []],
+  ['cantidad',      'CANTIDAD',              'text',   '',            []],
+  ['naviera',       'NAVIERA',               'text',   '',            []],
 ];
+// Columnas de gestión que agrega el CRM a la derecha (opcionales en el Excel de alimentación)
+const CRM_COLUMNS = [
+  ['estado',           'Estado',               'estado',    '', []],
+  ['prioridad',        'Prioridad',            'prioridad', '', []],
+  ['seguroPrima',      'Seguro prima USD',     'num',       '', []],
+  // Cobro de la comisión propia: se cobra DESPUÉS de que el cliente paga el servicio
+  ['fechaPagoCliente', 'Pago cliente',         'date',      '', ['Fecha pago cliente']],
+  ['cobrado',          'Comisión cobrada USD', 'num',       '', ['Cobrado USD', 'Cobrado']],
+  ['fechaCobro',       'Fecha cobro comisión', 'date',      '', ['Fecha cobro']],
+  ['alertas',          'Alertas',              'alertas',   '', []],
+];
+const EXCEL_COLUMNS = [...FEED_COLUMNS, ...CRM_COLUMNS];
+const LABELS = Object.fromEntries(EXCEL_COLUMNS.map(c => [c[0], c[1]]));
+const REQUIRED_KEYS = FEED_COLUMNS.filter(c => c[3] === 'obligatorio').map(c => c[0]);
+const IMPORTANT_KEYS = FEED_COLUMNS.filter(c => c[3] === 'importante').map(c => c[0]);
 
+// Datos de ejemplo (referidos a fines de nov-2026)
 const SAMPLE_DATA = [
-  { ro:'2024-01', consignatario:'ACME SAC', ruta:'LIM→SHA', servicio:'FCL', naviera:'Maersk', etd:'18/11/2024', eta:'12/12/2024', sem:'verde', prioridad:false, pendiente:4200,
-    broker:'ABC Brokers', comision:850, seguro:210, cierre:'10/11/2024', validez:'30/11/2024', agente:'—', ref:'ACME-2024-101', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'18/11/2024','In transit':'19/11/2024'}, alertas:[] },
-  { ro:'2024-02', consignatario:'Global Trade Perú', ruta:'LIM→RTM', servicio:'LCL', naviera:'MSC', etd:'20/11/2024', eta:'20/12/2024', sem:'ambar', prioridad:true, pendiente:1850,
-    broker:'XYZ Corp', comision:320, seguro:95, cierre:'12/11/2024', validez:'22/11/2024', agente:'Rotterdam Agent', ref:'GTP-2024-088', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'16/11/2024','Loaded':'20/11/2024','In transit':'21/11/2024'}, alertas:['VALIDEZ vence en 3 días'] },
-  { ro:'2024-03', consignatario:'Import del Sur', ruta:'LIM→HAM', servicio:'FCL', naviera:'CMA CGM', etd:'15/11/2024', eta:'08/12/2024', sem:'rojo', prioridad:true, pendiente:6300,
-    broker:'ABC Brokers', comision:850, seguro:420, cierre:'10/11/2024', validez:'25/11/2024', agente:'Hansa Agent GmbH', ref:'IMP-2024-089', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'15/11/2024','In transit':'16/11/2024'}, alertas:['VALIDEZ vencida hace 2 días','PENDIENTE > 60 días — escalar a cobranza','ETA desviada +2 días'] },
-  { ro:'2024-04', consignatario:'Comercial Andina', ruta:'LIM→MIA', servicio:'Aéreo', naviera:'LATAM', etd:'19/11/2024', eta:'21/11/2024', sem:'verde', prioridad:false, pendiente:980,
-    broker:'Global Log', comision:140, seguro:45, cierre:'14/11/2024', validez:'28/11/2024', agente:'—', ref:'AND-2024-014', estado:'CERRADA',
-    hitos:{'Booking confirmado':'14/11/2024','Gate-in':'18/11/2024','Loaded':'19/11/2024','In transit':'19/11/2024','Discharged':'21/11/2024','Delivered':'22/11/2024'}, alertas:[] },
-  { ro:'2024-05', consignatario:'Distribuidora XYZ', ruta:'LIM→BUE', servicio:'FCL', naviera:'Hapag', etd:'21/11/2024', eta:'15/12/2024', sem:'ambar', prioridad:true, pendiente:3450,
-    broker:'XYZ Corp', comision:410, seguro:180, cierre:'15/11/2024', validez:'24/11/2024', agente:'—', ref:'DXYZ-2024-032', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'15/11/2024','Gate-in':'19/11/2024','Loaded':'21/11/2024'}, alertas:['VALIDEZ vence en 1 día'] },
-  { ro:'2024-06', consignatario:'Textiles Unidos', ruta:'LIM→VLC', servicio:'LCL', naviera:'ONE', etd:'14/11/2024', eta:'10/12/2024', sem:'rojo', prioridad:true, pendiente:2100,
-    broker:'Global Log', comision:260, seguro:0, cierre:'08/11/2024', validez:'20/11/2024', agente:'Valencia Agent', ref:'TXT-2024-076', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'08/11/2024','Gate-in':'11/11/2024','Loaded':'14/11/2024','In transit':'15/11/2024'}, alertas:['Sin seguro registrado','PENDIENTE > 60 días','ETA desviada +3 días'] },
-  { ro:'2024-07', consignatario:'Agroexport S.A.', ruta:'LIM→QING', servicio:'FCL', naviera:'Maersk', etd:'22/11/2024', eta:'28/12/2024', sem:'verde', prioridad:false, pendiente:5600,
-    broker:'ABC Brokers', comision:920, seguro:280, cierre:'16/11/2024', validez:'02/12/2024', agente:'Qingdao Partner', ref:'AGRO-2024-045', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'16/11/2024','Gate-in':'20/11/2024'}, alertas:[] },
-  { ro:'2024-08', consignatario:'Minera del Norte', ruta:'LIM→BUS', servicio:'FCL', naviera:'MSC', etd:'17/11/2024', eta:'14/12/2024', sem:'ambar', prioridad:true, pendiente:8200,
-    broker:'XYZ Corp', comision:1100, seguro:390, cierre:'11/11/2024', validez:'23/11/2024', agente:'—', ref:'MIN-2024-051', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'14/11/2024','Loaded':'17/11/2024','In transit':'18/11/2024'}, alertas:['PENDIENTE 30–60 días'] },
+  { broker:'ABC Brokers', comision:600, observacion:'', seguroAplica:'APLICA', ro:'2026-099', cierre:'25/08/2026', validez:'05/09/2026', servicio:'FCL', consignatario:'Importadora Lima', ref:'IL-4410', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'20/08/2026', eta:'25/09/2026', cantidad:'1x40HC', naviera:'COSCO',
+    estado:'CERRADA', prioridad:false, seguroPrima:150, fechaPagoCliente:'30/09/2026', cobrado:300, fechaCobro:'15/10/2026', alertas:[] },
+  { broker:'XYZ Corp', comision:780, observacion:'Cliente pagó, falta cobrar', seguroAplica:'APLICA', ro:'2026-100', cierre:'20/08/2026', validez:'31/08/2026', servicio:'FCL', consignatario:'Electro Andes', ref:'EA-2210', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'28/08/2026', eta:'01/10/2026', cantidad:'2x40HC', naviera:'ONE',
+    estado:'CERRADA', prioridad:true, seguroPrima:240, fechaPagoCliente:'03/10/2026', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'ABC Brokers', comision:850, observacion:'Cliente frecuente', seguroAplica:'APLICA', ro:'2026-101', cierre:'05/09/2026', validez:'20/09/2026', servicio:'FCL', consignatario:'ACME SAC', ref:'ACME-PO-7781', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'28/09/2026', eta:'02/11/2026', cantidad:'2x40HC', naviera:'Maersk',
+    estado:'CERRADA', prioridad:false, seguroPrima:210, fechaPagoCliente:'06/11/2026', cobrado:850, fechaCobro:'15/11/2026', alertas:[] },
+  { broker:'XYZ Corp', comision:320, observacion:'', seguroAplica:'NO APLICA', ro:'2026-102', cierre:'18/09/2026', validez:'30/09/2026', servicio:'LCL', consignatario:'Global Trade Perú', ref:'GTP-088', agente:'Rotterdam Coload', ruta:'RTM→CAL', etd:'08/10/2026', eta:'14/11/2026', cantidad:'6 CBM', naviera:'MSC',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'20/11/2026', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'', comision:0, observacion:'Broker por definir', seguroAplica:'', ro:'2026-103', cierre:'29/09/2026', validez:'15/10/2026', servicio:'FCL', consignatario:'Import del Sur', ref:'IDS-2201', agente:'Hansa Agent GmbH', ruta:'HAM→CAL', etd:'20/10/2026', eta:'28/11/2026', cantidad:'1x20GP', naviera:'Hapag',
+    estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +2 días'] },
+  { broker:'Global Log', comision:140, observacion:'', seguroAplica:'APLICA', ro:'2026-104', cierre:'03/10/2026', validez:'18/10/2026', servicio:'Aéreo', consignatario:'Comercial Andina', ref:'AND-014', agente:'Miami Air Agent', ruta:'MIA→LIM', etd:'24/11/2026', eta:'25/11/2026', cantidad:'320 kg', naviera:'LATAM',
+    estado:'ABIERTA', prioridad:false, seguroPrima:45, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'XYZ Corp', comision:410, observacion:'', seguroAplica:'APLICA', ro:'2026-105', cierre:'14/10/2026', validez:'30/10/2026', servicio:'FCL', consignatario:'Distribuidora XYZ', ref:'DXYZ-032', agente:'BUE Coload', ruta:'BUE→CAL', etd:'20/10/2026', eta:'10/11/2026', cantidad:'1x40HC', naviera:'Hapag',
+    estado:'ABIERTA', prioridad:true, seguroPrima:180, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'Global Log', comision:260, observacion:'Pendiente confirmar seguro', seguroAplica:'', ro:'2026-106', cierre:'22/10/2026', validez:'05/11/2026', servicio:'LCL', consignatario:'Textiles Unidos', ref:'TXT-076', agente:'', ruta:'VLC→CAL', etd:'15/11/2026', eta:'20/12/2026', cantidad:'3 CBM', naviera:'ONE',
+    estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +3 días'] },
+  { broker:'ABC Brokers', comision:920, observacion:'', seguroAplica:'APLICA', ro:'2026-107', cierre:'30/10/2026', validez:'15/11/2026', servicio:'FCL', consignatario:'Agroexport S.A.', ref:'AGRO-045', agente:'Qingdao Partner', ruta:'CAL→QIN', etd:'01/12/2026', eta:'05/01/2027', cantidad:'4x40RF', naviera:'Maersk',
+    estado:'ABIERTA', prioridad:false, seguroPrima:280, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'XYZ Corp', comision:1100, observacion:'Carga proyecto', seguroAplica:'APLICA', ro:'2026-108', cierre:'04/11/2026', validez:'20/11/2026', servicio:'FCL', consignatario:'Minera del Norte', ref:'MIN-051', agente:'Busan Agent', ruta:'BUS→CAL', etd:'18/11/2026', eta:'29/12/2026', cantidad:'3x40OT', naviera:'MSC',
+    estado:'ABIERTA', prioridad:true, seguroPrima:390, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'', comision:0, observacion:'', seguroAplica:'NO APLICA', ro:'2026-109', cierre:'10/11/2026', validez:'28/11/2026', servicio:'Aéreo', consignatario:'Farma Lima SAC', ref:'FL-3302', agente:'Frankfurt Air', ruta:'FRA→LIM', etd:'02/12/2026', eta:'04/12/2026', cantidad:'150 kg', naviera:'Lufthansa Cargo',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'ABC Brokers', comision:530, observacion:'', seguroAplica:'APLICA', ro:'2026-110', cierre:'17/11/2026', validez:'27/11/2026', servicio:'FCL', consignatario:'Ferretería Central', ref:'', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'10/12/2026', eta:'15/01/2027', cantidad:'1x40HC', naviera:'COSCO',
+    estado:'ABIERTA', prioridad:false, seguroPrima:150, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'Global Log', comision:300, observacion:'', seguroAplica:'', ro:'2026-111', cierre:'21/11/2026', validez:'05/12/2026', servicio:'LCL', consignatario:'Retail Perú', ref:'RP-9921', agente:'Miami Coload', ruta:'MIA→CAL', etd:'08/12/2026', eta:'18/12/2026', cantidad:'4 CBM', naviera:'CMA CGM',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'XYZ Corp', comision:0, observacion:'Comisión por negociar', seguroAplica:'APLICA', ro:'2026-112', cierre:'25/11/2026', validez:'10/12/2026', servicio:'FCL', consignatario:'Pesquera Pacífico', ref:'PP-118', agente:'Shanghai Partner', ruta:'CAL→SHA', etd:'15/12/2026', eta:'22/01/2027', cantidad:'2x40RF', naviera:'Maersk',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
 ];
 
 function loadData() {
@@ -192,42 +249,99 @@ function normDate(v) {
   const s = String(v).trim();
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (iso) return `${pad2(iso[3])}/${pad2(iso[2])}/${iso[1]}`;
-  const d = parseDate(s);
+  const d = parseDate(s.replace(/[-.]/g, '/'));
   return d ? fmtDate(d) : s;
 }
-function currentMilestone(r) {
-  let cur = 'Sin booking';
-  MILESTONES.forEach(m => { if (r.hitos && r.hitos[m]) cur = m; });
-  return cur;
-}
 const normKey = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function isBlank(v) { return v === undefined || v === null || String(v).trim() === '' || String(v).trim() === '—'; }
+function hoy() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function diasDesde(s) { const d = parseDate(s); return d ? Math.round((hoy() - d) / 864e5) : null; }
+
+// ---- Mes de cierre (para agrupar) ----
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function mesCierre(r) { const d = parseDate(r.cierre); return d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}` : ''; }
+function mesLabel(k) { if (!k) return 'Sin fecha de cierre'; const [y, m] = k.split('-'); return `${MESES[Number(m) - 1]} ${y}`; }
+
+// ---- Cobro de la comisión propia: se cobra cuando el cliente ya pagó el servicio ----
+function cobroInfo(r) {
+  const com = Number(r.comision) || 0, cob = Number(r.cobrado) || 0;
+  const saldo = Math.max(0, Math.round((com - cob) * 100) / 100);
+  const pago = parseDate(r.fechaPagoCliente);
+  let estado;
+  if (com <= 0) estado = 'SIN COMISIÓN';
+  else if (cob >= com) estado = 'COBRADA';
+  else if (cob > 0) estado = 'PARCIAL';
+  else if (pago) estado = 'LISTA PARA COBRAR';
+  else estado = 'ESPERA PAGO CLIENTE';
+  const diasDesdePago = pago && saldo > 0 ? Math.max(0, diasDesde(r.fechaPagoCliente)) : 0;   // urgencia del cobro
+  const dEta = diasDesde(r.eta);
+  const diasSinPago = !pago && com > 0 && dEta !== null && dEta > 0 ? dEta : 0;                 // carga arribó y el cliente aún no paga
+  return { com, cob, saldo, estado, pago, diasDesdePago, diasSinPago, cobrable: !!pago && saldo > 0 };
+}
+
+// ---- Etapa de la operación (solo ETD / ETA + cobro) ----
+const ETAPAS = ['Por zarpar', 'En tránsito', 'Arribada · espera pago cliente', 'Lista para cobrar comisión', 'Comisión cobrada'];
+const ETAPA_COLORS = {
+  'Por zarpar':'#4a4a4a', 'En tránsito':'#d2d2d2', 'Arribada · espera pago cliente':'#5aa0ff',
+  'Lista para cobrar comisión':'#f5c518', 'Comisión cobrada':'#00d26a'
+};
+function etapa(r) {
+  const c = cobroInfo(r);
+  if (c.estado === 'COBRADA') return 'Comisión cobrada';
+  if (c.cobrable) return 'Lista para cobrar comisión';
+  const t = hoy(), etd = parseDate(r.etd), eta = parseDate(r.eta);
+  if (etd && t < etd) return 'Por zarpar';
+  if (eta && t < eta) return 'En tránsito';
+  if (c.estado === 'SIN COMISIÓN' && c.pago) return 'Comisión cobrada';
+  return 'Arribada · espera pago cliente';
+}
+
+// ---- Calidad de datos y semáforo (calculado, no se guarda) ----
+function faltantes(r) {
+  return {
+    obligatorios: REQUIRED_KEYS.filter(k => isBlank(r[k])),
+    importantes: IMPORTANT_KEYS.filter(k => k === 'comision' ? !(Number(r.comision) > 0) : isBlank(r[k])),
+  };
+}
+// rojo: falta un dato obligatorio o la comisión lleva > 30 días lista para cobrar
+// ámbar: falta un dato importante, hay comisión lista para cobrar, o el cliente no paga > 30 días después del arribo
+function calcSem(r) {
+  const f = faltantes(r), c = cobroInfo(r);
+  if (f.obligatorios.length || (c.cobrable && c.diasDesdePago > 30)) return 'rojo';
+  if (f.importantes.length || c.cobrable || c.diasSinPago > 30) return 'ambar';
+  return 'verde';
+}
+
+// Filas de notas debajo del encabezado ("IMPORTANTE", "NUNCA VACIO"...) se ignoran al importar
+function esFilaDeNotas(raw) {
+  const vals = Object.values(raw).map(v => String(v).trim());
+  if (vals.some(v => /^(total|totales|subtotal)$/i.test(v))) return true;   // fila de totales
+  return vals.filter(v => /importa|nunca|vac[ií]o|aplica\s+no\s+aplica/i.test(v)).length >= 2;
+}
 
 function rowsFromSheet(json) {
-  return json.map(raw => {
+  return json.filter(raw => !esFilaDeNotas(raw)).map(raw => {
     const byKey = {};
     Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
-    const get = (key, header) => {
-      for (const k of [normKey(header), normKey(key.replace('hito:', '')), normKey(header.replace(/usd/i, ''))]) if (k in byKey) return byKey[k];
+    const get = (key, header, aliases) => {
+      for (const k of [header, ...aliases, key].map(normKey)) if (k in byKey) return byKey[k];
       return '';
     };
-    const r = { hitos: {}, alertas: [] };
-    EXCEL_COLUMNS.forEach(([key, header, type]) => {
-      const v = get(key, header);
+    const r = { alertas: [] };
+    EXCEL_COLUMNS.forEach(([key, header, type, , aliases]) => {
+      const v = get(key, header, aliases);
       let val;
       switch (type) {
         case 'num': val = Number(String(v).replace(/[$,\s]/g, '')) || 0; break;
         case 'date': val = normDate(v); break;
         case 'prioridad': val = /^(si|sí|alta|true|1|x)$/i.test(String(v).trim()); break;
-        case 'sem': { const s = normKey(v); val = s.startsWith('roj') ? 'rojo' : s.startsWith('amb') || s.startsWith('ama') ? 'ambar' : 'verde'; break; }
         case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
-        case 'seguroEstado': { const s = normKey(v); val = s.includes('nocontratado') || s === 'no' ? 'NO_CONTRATADO' : s.includes('contratado') ? 'CONTRATADO' : ''; break; }
+        case 'seguro': { const s = normKey(v); val = /^(noaplica|no|na|nocontratado)$/.test(s) ? 'NO APLICA' : /^(aplica|si|contratado)$/.test(s) ? 'APLICA' : ''; break; }
         case 'alertas': val = String(v || '').replace(/[<>]/g, '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
         default: val = String(v ?? '').replace(/[<>]/g, '').trim();
       }
-      if (key.startsWith('hito:')) { if (val) r.hitos[key.slice(5)] = val; }
-      else r[key] = val;
+      r[key] = val;
     });
-    if (!r.agente) r.agente = '—';
     return r;
   }).filter(r => r.ro);
 }
@@ -236,9 +350,8 @@ function rowsToSheet(data) {
   return data.map(r => {
     const o = {};
     EXCEL_COLUMNS.forEach(([key, header, type]) => {
-      let v = key.startsWith('hito:') ? (r.hitos || {})[key.slice(5)] || '' : r[key];
+      let v = r[key];
       if (type === 'prioridad') v = v ? 'Alta' : 'Normal';
-      else if (type === 'seguroEstado') v = v === 'NO_CONTRATADO' ? 'No contratado' : v === 'CONTRATADO' ? 'Contratado' : '';
       else if (type === 'alertas') v = (v || []).join('; ');
       o[header] = v ?? '';
     });
@@ -252,17 +365,79 @@ async function importExcelFile(file) {
   const name = wb.SheetNames.find(n => normKey(n) === 'oportunidades') || wb.SheetNames[0];
   const rows = rowsFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true }));
   if (!rows.length) throw new Error('No se encontraron filas con RO en la hoja "' + name + '".');
+  const cli = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes');
+  rows.clientes = cli ? clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[cli], { defval: '', raw: false })) : null;
   return rows;
+}
+async function importClientesFile(file) {
+  if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const name = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes') || wb.SheetNames[0];
+  const list = clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false }));
+  if (!list.length) throw new Error('No se encontraron filas con EMPRESA en la hoja "' + name + '".');
+  return list;
 }
 
 function downloadExcel(data, filename) {
   if (!window.XLSX) { alert('No se pudo cargar la librería de Excel (revisa tu conexión a internet).'); return; }
   const ws = XLSX.utils.json_to_sheet(rowsToSheet(data), { header: EXCEL_COLUMNS.map(c => c[1]) });
   ws['!cols'] = EXCEL_COLUMNS.map(c => ({ wch: Math.max(12, c[1].length + 2) }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length, c: EXCEL_COLUMNS.length - 1 } }) };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Oportunidades');
+  if (typeof CLIENTES !== 'undefined' && CLIENTES.length) {
+    const wc = XLSX.utils.json_to_sheet(clientesToSheet(CLIENTES), { header: CLIENT_COLUMNS.map(c => c[1]) });
+    wc['!cols'] = CLIENT_COLUMNS.map(() => ({ wch: 22 }));
+    XLSX.utils.book_append_sheet(wb, wc, 'Clientes');
+  }
   XLSX.writeFile(wb, filename);
 }
+
+// ============ BD CLIENTES ============
+const CLIENTES_KEY = 'crm_clientes_v1';
+// [clave, encabezado en Excel, obligatorio, alias]
+const CLIENT_COLUMNS = [
+  ['empresa',   'EMPRESA',   true,  ['Cliente', 'Razón social', 'Razon social']],
+  ['contacto',  'CONTACTO',  false, []],
+  ['celular',   'CELULAR',   false, ['Teléfono', 'Telefono', 'Móvil', 'Movil']],
+  ['correo',    'CORREO',    false, ['Email', 'E-mail', 'Mail']],
+  ['direccion', 'DIRECCION', false, ['Dirección']],
+  ['distrito',  'DISTRITO',  false, []],
+  ['semana',    'SEMANA',    false, []],   // también acepta encabezados como "SEMANA 35"
+];
+const SAMPLE_CLIENTES = [
+  { empresa:'ACME SAC', contacto:'Carla Ríos', celular:'987654321', correo:'compras@acme.pe', direccion:'Av. Argentina 1450', distrito:'Callao', semana:'35' },
+  { empresa:'Global Trade Perú', contacto:'Jorge Paredes', celular:'991234567', correo:'jparedes@globaltrade.pe', direccion:'Jr. Huallaga 320', distrito:'Cercado de Lima', semana:'35' },
+  { empresa:'Import del Sur', contacto:'Lucía Medina', celular:'956789012', correo:'lmedina@importsur.pe', direccion:'Av. Colonial 2100', distrito:'Lima', semana:'36' },
+  { empresa:'Comercial Andina', contacto:'Pedro Salas', celular:'944556677', correo:'psalas@andina.com.pe', direccion:'Calle Los Pinos 145', distrito:'San Isidro', semana:'36' },
+  { empresa:'Agroexport S.A.', contacto:'María Torres', celular:'933221100', correo:'mtorres@agroexport.pe', direccion:'Panamericana Sur km 32', distrito:'Lurín', semana:'37' },
+  { empresa:'Minera del Norte', contacto:'Ricardo Vega', celular:'922113344', correo:'logistica@mineranorte.pe', direccion:'Av. Javier Prado Este 4200', distrito:'Surco', semana:'37' },
+  { empresa:'Farma Lima SAC', contacto:'Ana Quispe', celular:'911002233', correo:'aquispe@farmalima.pe', direccion:'Av. La Marina 980', distrito:'San Miguel', semana:'' },
+  { empresa:'Retail Perú', contacto:'', celular:'', correo:'importaciones@retailperu.pe', direccion:'Av. Benavides 1555', distrito:'Miraflores', semana:'38' },
+];
+function loadClientes() {
+  try { const s = localStorage.getItem(CLIENTES_KEY); if (s) { const d = JSON.parse(s); if (Array.isArray(d)) return d; } } catch (e) {}
+  return JSON.parse(JSON.stringify(SAMPLE_CLIENTES));
+}
+function saveClientes() { try { localStorage.setItem(CLIENTES_KEY, JSON.stringify(CLIENTES)); } catch (e) {} }
+function clientesFromSheet(json) {
+  return json.map(raw => {
+    const byKey = {};
+    Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const c = {};
+    CLIENT_COLUMNS.forEach(([key, header, , aliases]) => {
+      let v = '';
+      for (const k of [header, ...aliases].map(normKey)) if (k in byKey) { v = byKey[k]; break; }
+      if (key === 'semana' && v === '') { const k = Object.keys(byKey).find(k => k.startsWith('semana')); if (k) v = byKey[k]; }
+      c[key] = String(v ?? '').replace(/[<>]/g, '').trim();
+    });
+    return c;
+  }).filter(c => c.empresa);
+}
+function clientesToSheet(list) {
+  return list.map(c => Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])));
+}
+const empresaKey = s => normKey(s).replace(/(sac|saa|sa|srl|eirl|sociedadanonima)$/,'');
 
 // ============ CONEXIÓN CON GOOGLE SHEETS (Apps Script) + LOGIN ============
 // Dentro de Apps Script existe google.script.run: los datos vienen de la hoja y se exige usuario/contraseña.
@@ -300,9 +475,9 @@ function showLogin(msg) {
   if (!ov) {
     document.body.insertAdjacentHTML('beforeend', `
     <div id="loginOverlay" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
-      <form id="loginForm" class="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4">
+      <form id="loginForm" class="w-full max-w-sm bg-card card rounded-xl shadow-xl p-6 space-y-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-sky-500 flex items-center justify-center text-xl">🚢</div>
+          <div class="w-9 h-9 rounded-lg btn-primary flex items-center justify-center text-[11px] font-bold tracking-tight">CRM</div>
           <div><h1 class="text-lg font-semibold text-slate-800 leading-tight">Control de Oportunidades</h1>
           <p class="text-xs text-slate-500">CRM · Agente de Carga Internacional</p></div>
         </div>
@@ -313,7 +488,7 @@ function showLogin(msg) {
           <div class="relative"><input id="loginPass" type="password" autocomplete="current-password" required class="w-full border border-slate-200 rounded-lg px-3 py-2 pr-16 text-sm focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500">
           <button type="button" onclick="const i=document.getElementById('loginPass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Ver':'Ocultar'" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-800">Ver</button></div></div>
         <p id="loginError" class="hidden text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2"></p>
-        <button id="loginBtn" type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-2 text-sm font-medium">Ingresar</button>
+        <button id="loginBtn" type="submit" class="w-full btn-primary rounded-full px-3 py-2 text-sm font-medium">Ingresar</button>
         <p class="text-[11px] text-slate-400 text-center">Acceso restringido. Si no tienes usuario, pídelo al administrador.</p>
       </form>
     </div>`);
@@ -343,11 +518,12 @@ function showLogin(msg) {
 }
 
 async function loadAllData() {
-  if (!IS_GAS) return loadData();
+  if (!IS_GAS) { CLIENTES = loadClientes(); return loadData(); }
   if (!getToken()) await showLogin();
   const res = await api('getData');
   SESSION = res.user;
   APP = { appUrl: res.appUrl, sheetUrl: res.sheetUrl, config: res.config || {} };
+  CLIENTES = clientesFromSheet(res.clientes || []);
   return rowsFromSheet(res.rows);
 }
 
@@ -409,32 +585,32 @@ function applySessionUI() {
 }
 
 let DATA = [];
+let CLIENTES = [];
 
 const DAY = 864e5;
-let LEFT_W = 260;
+let LEFT_W = 270;
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const diffDays = (a, b) => Math.round((b - a) / DAY);
 const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-const ESTADO_BADGE = { ABIERTA:'bg-emerald-100 text-emerald-700', CERRADA:'bg-red-100 text-red-700', GANADA:'bg-sky-100 text-sky-700', PERDIDA:'bg-slate-200 text-slate-700' };
 const isoOf = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const fmt$ = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
-// Fecha de corte por defecto: hoy; si los datos no llegan a hoy (p. ej. datos de ejemplo), el último hito registrado.
+// Fecha de corte: hoy; si los datos no llegan a hoy, la última fecha registrada
 function defaultCorte() {
-  const today = new Date(); const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const t = hoy();
   const all = [];
-  DATA.forEach(r => { [r.etd, r.eta, ...Object.values(r.hitos || {})].forEach(s => { const d = parseDate(s); if (d) all.push(d); }); });
+  DATA.forEach(r => [r.etd, r.eta, r.fechaPagoCliente, r.fechaCobro].forEach(s => { const d = parseDate(s); if (d) all.push(d); }));
   if (!all.length) return { d: t, adjusted: false };
   const min = new Date(Math.min(...all)), max = new Date(Math.max(...all));
   if (t >= addDays(min, -30) && t <= addDays(max, 30)) return { d: t, adjusted: false };
-  const hitos = [];
-  DATA.forEach(r => Object.values(r.hitos || {}).forEach(s => { const d = parseDate(s); if (d) hitos.push(d); }));
-  return { d: hitos.length ? new Date(Math.max(...hitos)) : min, adjusted: true };
+  return { d: max, adjusted: true };
 }
 function setDefaultCorte() {
   const c = defaultCorte();
   document.getElementById('fCorte').value = isoOf(c.d);
   document.getElementById('corteNote').textContent = c.adjusted
-    ? 'La fecha de corte se ajustó al último hito registrado porque los datos no llegan a la fecha de hoy. Puedes cambiarla.'
+    ? 'La fecha de corte se ajustó a la última fecha registrada porque los datos no llegan a hoy. Puedes cambiarla.'
     : 'La fecha de corte es hoy. Puedes cambiarla para simular otro día.';
 }
 function getCorte() {
@@ -444,66 +620,70 @@ function getCorte() {
   return new Date(y, m - 1, d);
 }
 
-function shipInfo(r, corte, ventana) {
-  const etd = parseDate(r.etd), eta = parseDate(r.eta);
-  const hito = currentMilestone(r);
-  const arrived = ['Discharged', 'Delivered'].includes(hito);
-  const dias = eta ? diffDays(corte, eta) : null;
-  let tag = 'normal';
-  if (hito === 'Delivered') tag = 'entregada';
-  else if (arrived) tag = 'arribada';
-  else if (dias !== null && dias < 0) tag = 'vencida';
-  else if (dias !== null && dias <= ventana) tag = 'proxima';
-  return { etd, eta, hito, dias, tag };
+function info(r, corte, ventana) {
+  const etd = parseDate(r.etd), eta = parseDate(r.eta), c = cobroInfo(r);
+  const pago = parseDate(r.fechaPagoCliente), cobro = parseDate(r.fechaCobro);
+  let et;
+  if (c.estado === 'COBRADA' || (c.estado === 'SIN COMISIÓN' && pago)) et = 'Comisión cobrada';
+  else if (pago && c.saldo > 0) et = 'Lista para cobrar comisión';
+  else if (etd && corte < etd) et = 'Por zarpar';
+  else if (eta && corte < eta) et = 'En tránsito';
+  else et = 'Arribada · espera pago cliente';
+  const dEta = eta ? diffDays(corte, eta) : null;
+  let badge;
+  if (et === 'Por zarpar') badge = [`Zarpa en ${diffDays(corte, etd)} d`, 'bg-slate-100 text-slate-600'];
+  else if (et === 'En tránsito') badge = [dEta === 0 ? 'Arriba hoy' : `Arriba en ${dEta} d`, dEta <= ventana ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-700'];
+  else if (et === 'Arribada · espera pago cliente') badge = [`Sin pago · ${-dEta} d`, -dEta > 30 ? 'bg-red-100 text-red-700' : 'bg-violet-100 text-violet-700'];
+  else if (et === 'Lista para cobrar comisión') badge = [`Cobrar ${fmt$(c.saldo)}`, 'bg-amber-100 text-amber-800'];
+  else badge = ['Cobrada', 'bg-emerald-100 text-emerald-700'];
+  return { etd, eta, pago, cobro, c, et, dEta, badge, pronto: et === 'En tránsito' && dEta !== null && dEta <= ventana };
 }
-const TAG_STYLE = {
-  proxima:   { badge:'bg-amber-100 text-amber-800', row:'border-l-4 border-amber-400', label: i => i.dias === 0 ? 'Arriba hoy' : `Arriba en ${i.dias} d` },
-  vencida:   { badge:'bg-red-100 text-red-700',     row:'border-l-4 border-red-500',   label: i => `ETA superada ${-i.dias} d` },
-  arribada:  { badge:'bg-orange-100 text-orange-700', row:'border-l-4 border-orange-300', label: () => 'Descargada' },
-  entregada: { badge:'bg-emerald-100 text-emerald-700', row:'border-l-4 border-emerald-400', label: () => 'Entregada' },
-  normal:    { badge:'bg-slate-100 text-slate-600', row:'border-l-4 border-transparent', label: i => i.dias === null ? 'Sin ETA' : `ETA en ${i.dias} d` },
-};
 
-function filteredRows() {
-  const fh = document.getElementById('fHito').value;
-  const fe = document.getElementById('fEstado').value;
-  return DATA.filter(r => (!fh || currentMilestone(r) === fh) && (!fe || r.estado === fe));
+function filtered() {
+  const fe = document.getElementById('fEtapa').value;
+  const q = document.getElementById('fTexto').value.trim().toLowerCase();
+  const corte = getCorte(), ventana = Number(document.getElementById('fVentana').value);
+  return DATA.map(r => ({ r, i: info(r, corte, ventana) }))
+    .filter(x => (!fe || x.i.et === fe) && (!q || [x.r.ro, x.r.consignatario, x.r.ruta, x.r.naviera].some(v => String(v || '').toLowerCase().includes(q))));
 }
 
 function render() {
   const corte = getCorte();
   const ventana = Number(document.getElementById('fVentana').value);
   const dayW = Number(document.getElementById('fZoom').value);
-  LEFT_W = window.innerWidth < 640 ? 170 : 260;
-  const rows = filteredRows().map(r => ({ r, i: shipInfo(r, corte, ventana) }))
-    .sort((a, b) => (a.i.eta || 0) - (b.i.eta || 0));
+  LEFT_W = window.innerWidth < 640 ? 170 : 270;
+  const rows = filtered().sort((a, b) => (a.i.eta || 0) - (b.i.eta || 0));
 
-  // KPIs
-  document.getElementById('kProximos').textContent = rows.filter(x => x.i.tag === 'proxima').length;
-  document.getElementById('kProximosSub').textContent = `ETA en los próximos ${ventana} días`;
-  document.getElementById('kTransito').textContent = rows.filter(x => x.i.hito === 'In transit').length;
-  document.getElementById('kVencidas').textContent = rows.filter(x => x.i.tag === 'vencida').length;
-  document.getElementById('kEntregadas').textContent = rows.filter(x => x.i.hito === 'Delivered').length;
+  const all = DATA.map(r => info(r, corte, ventana));
+  const set = (id, v) => document.getElementById(id).textContent = v;
+  set('kZarpar', all.filter(i => i.et === 'Por zarpar').length);
+  set('kTransito', all.filter(i => i.et === 'En tránsito').length);
+  set('kProximos', all.filter(i => i.pronto).length);
+  set('kProximosSub', `ETA en ${ventana} días o menos`);
+  const esp = all.filter(i => i.et === 'Arribada · espera pago cliente');
+  set('kEspera', esp.length);
+  set('kEsperaSub', `${fmt$(esp.reduce((s, i) => s + i.c.saldo, 0))} de comisión en espera`);
+  const lis = all.filter(i => i.et === 'Lista para cobrar comisión');
+  set('kLista', fmt$(lis.reduce((s, i) => s + i.c.saldo, 0)));
+  set('kListaSub', `${lis.length} RO con cliente pagado`);
 
-  // Rango de fechas del Gantt
+  if (!rows.length) { document.getElementById('gantt').innerHTML = '<p class="p-6 text-sm text-slate-400 text-center">No hay operaciones con los filtros seleccionados.</p>'; return; }
+
   const dates = [corte];
-  rows.forEach(({ r, i }) => { [i.etd, i.eta, ...Object.values(r.hitos || {}).map(parseDate)].forEach(d => d && dates.push(d)); });
+  rows.forEach(({ i }) => [i.etd, i.eta, i.pago, i.cobro].forEach(d => d && dates.push(d)));
   const start = addDays(new Date(Math.min(...dates)), -3);
   const end = addDays(new Date(Math.max(...dates)), 5);
   const nDays = diffDays(start, end) + 1;
   const W = nDays * dayW;
   const x = d => diffDays(start, d) * dayW;
 
-  // Encabezado: meses y días
-  let months = '', days = '';
+  let months = '', days = '', bg = '';
   for (let k = 0; k < nDays; ) {
     const d = addDays(start, k);
-    const left = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const span = Math.min(nDays - k, diffDays(d, left));
-    months += `<div class="g-day text-xs font-semibold text-slate-600 py-1 text-left px-2 truncate" style="width:${span * dayW}px">${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>`;
+    const span = Math.min(nDays - k, diffDays(d, new Date(d.getFullYear(), d.getMonth() + 1, 1)));
+    months += `<div class="g-day text-xs font-semibold text-slate-600 py-1 px-2 truncate" style="width:${span * dayW}px;text-align:left">${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>`;
     k += span;
   }
-  let bg = '';
   for (let k = 0; k < nDays; k++) {
     const d = addDays(start, k), we = d.getDay() === 0 || d.getDay() === 6;
     days += `<div class="g-day text-[10px] text-slate-500 py-1 ${we ? 'g-weekend' : ''}" style="width:${dayW}px">${d.getDate()}</div>`;
@@ -512,60 +692,52 @@ function render() {
   const corteLine = `<div class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-[3]" style="left:${x(corte) + dayW / 2}px" title="Fecha de corte ${fmtDate(corte)}"></div>`;
 
   const body = rows.map(({ r, i }) => {
-    const st = TAG_STYLE[i.tag];
-    // Tramos por hito cumplido
-    const done = MILESTONES.map(m => ({ m, d: parseDate((r.hitos || {})[m]) })).filter(h => h.d);
-    let segs = '';
-    done.forEach((h, k) => {
-      const next = done[k + 1];
-      let to = next ? next.d : (i.hito === 'Delivered' ? addDays(h.d, 1) : (corte > h.d ? corte : addDays(h.d, 1)));
-      const left = x(h.d), w = Math.max(dayW * 0.35, x(to) - left);
-      segs += `<div class="absolute h-5 top-1/2 -translate-y-1/2 first:rounded-l-md" style="left:${left}px;width:${w}px;background:${MILESTONE_COLORS[h.m]}" title="${h.m}: ${fmtDate(h.d)}${next ? ' → ' + next.m + ': ' + fmtDate(next.d) : ''}"></div>`;
-    });
-    // Tramo pendiente hasta ETA
-    const lastEnd = done.length ? (i.hito === 'Delivered' ? null : (corte > done[done.length - 1].d ? corte : addDays(done[done.length - 1].d, 1))) : (i.etd || null);
-    let plan = '';
-    if (lastEnd && i.eta && i.eta >= lastEnd && i.hito !== 'Delivered') {
-      plan = `<div class="absolute h-5 top-1/2 -translate-y-1/2 rounded-r-md g-plan" style="left:${x(lastEnd)}px;width:${x(addDays(i.eta, 1)) - x(lastEnd)}px" title="Pendiente hasta ETA ${r.eta}"></div>`;
+    const color = ETAPA_COLORS[i.et];
+    let track = '';
+    if (i.etd && i.eta) {
+      track += `<div class="absolute h-4 top-1/2 -translate-y-1/2 rounded-full" style="left:${x(i.etd)}px;width:${Math.max(dayW, x(addDays(i.eta, 1)) - x(i.etd))}px;background:${color}" title="ETD ${esc(r.etd)} → ETA ${esc(r.eta)}"></div>`;
     }
-    const etdMark = i.etd ? `<div class="absolute text-[10px] text-slate-700 z-[2]" style="left:${x(i.etd) + dayW / 2 - 5}px;bottom:2px" title="ETD ${r.etd}">▲</div>` : '';
-    const etaMark = i.eta ? `<div class="absolute text-sm z-[2]" style="left:${x(i.eta) + dayW / 2 - 2}px;top:2px" title="ETA ${r.eta}">🏁</div>` : '';
-    return `<div class="g-row flex" data-ro="${r.ro}" onclick="goTo(pageUrl('crm', this.dataset.ro))">
-      <div class="g-left shrink-0 px-3 py-2 border-b border-slate-100 ${st.row}" style="width:${LEFT_W}px">
+    // Después del arribo: espera de pago del cliente y luego cobro de comisión
+    if (i.eta) {
+      const finEspera = i.pago || (corte > i.eta ? corte : null);
+      if (finEspera && finEspera > i.eta) track += `<div class="absolute top-1/2 -translate-y-1/2 g-wait text-violet-600" style="left:${x(addDays(i.eta, 1))}px;width:${x(finEspera) - x(addDays(i.eta, 1)) + dayW / 2}px" title="Espera de pago del cliente"></div>`;
+      if (i.pago && i.c.saldo > 0 && corte > i.pago) track += `<div class="absolute top-1/2 -translate-y-1/2 h-1 rounded-full bg-amber-500" style="left:${x(i.pago) + dayW / 2}px;width:${x(corte) - x(i.pago)}px" title="Comisión por cobrar desde ${esc(r.fechaPagoCliente)}"></div>`;
+      if (i.pago && i.cobro && i.c.estado === 'COBRADA' && i.cobro > i.pago) track += `<div class="absolute top-1/2 -translate-y-1/2 h-1 rounded-full bg-emerald-500" style="left:${x(i.pago) + dayW / 2}px;width:${x(i.cobro) - x(i.pago)}px"></div>`;
+    }
+    if (i.pago) track += `<div class="absolute text-sm z-[2]" style="left:${x(i.pago) + dayW / 2 - 8}px;top:2px" title="Pago del cliente ${esc(r.fechaPagoCliente)}"><span class="block w-3 h-3 rounded-full border-2 border-slate-800 bg-slate-900"></span></div>`;
+    if (i.cobro && i.c.cob > 0) track += `<div class="absolute text-sm z-[2]" style="left:${x(i.cobro) + dayW / 2 - 8}px;bottom:2px" title="Comisión cobrada ${esc(r.fechaCobro)} · ${fmt$(i.c.cob)}"><span class="block w-3 h-3 rounded-full bg-emerald-500"></span></div>`;
+    return `<div class="g-row flex" data-ro="${esc(r.ro)}" onclick="goTo(pageUrl('crm', this.dataset.ro))">
+      <div class="g-left shrink-0 px-3 py-2 border-b border-slate-200" style="width:${LEFT_W}px;border-left:4px solid ${color}">
         <div class="flex items-center justify-between gap-2">
-          <span class="font-semibold text-slate-800 text-sm">RO ${r.ro}</span>
-          <span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${st.badge}">${st.label(i)}</span>
+          <span class="font-semibold text-slate-800 text-sm">RO ${esc(r.ro)}</span>
+          <span class="text-[11px] rounded-full px-2 py-0.5 whitespace-nowrap ${i.badge[1]}">${i.badge[0]}</span>
         </div>
-        <div class="text-xs text-slate-500 truncate">${r.consignatario} · ${r.ruta}</div>
-        <div class="flex items-center justify-between text-[11px] mt-0.5">
-          <span class="flex items-center gap-1 text-slate-600"><span class="w-2 h-2 rounded-full" style="background:${MILESTONE_COLORS[i.hito]}"></span>${i.hito}</span>
-          <span class="rounded px-1.5 ${ESTADO_BADGE[r.estado] || 'bg-slate-100 text-slate-600'}">${r.estado}</span>
-        </div>
+        <div class="text-xs text-slate-500 truncate">${esc(r.consignatario)} · ${esc(r.ruta)}</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">ETD ${esc(r.etd) || '—'} · ETA ${esc(r.eta) || '—'}</div>
       </div>
-      <div class="g-track relative border-b border-slate-100" style="width:${W}px;min-height:64px">${segs}${plan}${etdMark}${etaMark}</div>
+      <div class="g-track relative border-b border-slate-200" style="width:${W}px;min-height:62px">${track}</div>
     </div>`;
   }).join('');
 
-  document.getElementById('gantt').innerHTML = rows.length ? `
-    <div class="g-wrap" style="width:${LEFT_W + W}px">
+  document.getElementById('gantt').innerHTML = `
+    <div style="width:${LEFT_W + W}px">
       <div class="g-head flex border-b border-slate-200">
-        <div class="g-left shrink-0 px-3 flex items-end pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500" style="width:${LEFT_W}px">Carga</div>
+        <div class="g-left shrink-0 px-3 flex items-end pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500" style="width:${LEFT_W}px">Operación</div>
         <div style="width:${W}px"><div class="flex">${months}</div><div class="flex">${days}</div></div>
       </div>
       <div class="relative">
         <div class="absolute top-0 bottom-0 pointer-events-none" style="left:${LEFT_W}px;width:${W}px">${bg}${corteLine}</div>
         ${body}
       </div>
-    </div>` : '<p class="p-6 text-sm text-slate-400 text-center">No hay cargas con los filtros seleccionados.</p>';
+    </div>`;
 }
 
 function renderLegend() {
-  document.getElementById('legend').innerHTML = MILESTONES.map(m =>
-    `<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:${MILESTONE_COLORS[m]}"></span>${m}</span>`).join('') +
-    '<span class="flex items-center gap-1.5"><span class="w-5 h-3 rounded-sm g-plan"></span>Pendiente</span>';
-  const sel = document.getElementById('fHito');
+  document.getElementById('legend').innerHTML = ETAPAS.map(m =>
+    `<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:${ETAPA_COLORS[m]}"></span>${m}</span>`).join('');
+  const sel = document.getElementById('fEtapa');
   sel.length = 1;
-  ['Sin booking', ...MILESTONES].forEach(m => sel.insertAdjacentHTML('beforeend', `<option>${m}</option>`));
+  ETAPAS.forEach(m => sel.insertAdjacentHTML('beforeend', `<option>${m}</option>`));
 }
 
 function showImportFeedback(msg, ok) {
@@ -578,20 +750,20 @@ async function handleExcelImport(input) {
   if (!file) return;
   try {
     DATA = await importExcelFile(file);
+    if (DATA.clientes) { CLIENTES = DATA.clientes; saveClientes(); }
     saveData();
     setDefaultCorte();
     render();
-    showImportFeedback(`Se importaron ${DATA.length} cargas desde "${file.name}".`, true);
+    showImportFeedback(`Se importaron ${DATA.length} operaciones desde "${file.name}".`, true);
   } catch (e) {
     showImportFeedback('No se pudo importar el Excel: ' + e.message, false);
   }
   input.value = '';
 }
 
-// Si el CRM cambia los datos en otra pestaña, se actualiza el calendario
 window.addEventListener('storage', e => { if (!IS_GAS && e.key === STORAGE_KEY) { DATA = loadData(); render(); } });
-['fCorte', 'fVentana', 'fHito', 'fEstado', 'fZoom'].forEach(id => document.getElementById(id).addEventListener('input', render));
-window.addEventListener('resize', () => { const w = window.innerWidth < 640 ? 170 : 260; if (w !== LEFT_W) render(); });
+['fCorte', 'fVentana', 'fEtapa', 'fTexto', 'fZoom'].forEach(id => document.getElementById(id).addEventListener('input', render));
+window.addEventListener('resize', () => { const w = window.innerWidth < 640 ? 170 : 270; if (w !== LEFT_W) render(); });
 
 renderLegend();
 (async () => {
@@ -604,7 +776,6 @@ renderLegend();
   applySessionUI();
   setDefaultCorte();
   render();
-  // Desplazar el Gantt hasta la fecha de corte
   const g = document.getElementById('gantt'); const line = g.querySelector('.bg-red-500');
   if (line) g.scrollLeft = Math.max(0, LEFT_W + line.offsetLeft - g.clientWidth / 2);
 })();

@@ -15,12 +15,16 @@ const SHEET_OPS = 'Oportunidades';
 const SHEET_USERS = 'Usuarios';
 const SHEET_CFG = 'Config';
 
-const MILESTONES = ['Booking confirmado', 'Gate-in', 'Loaded', 'In transit', 'Discharged', 'Delivered'];
-const HEADERS = ['RO', 'Consignatario', 'Ruta', 'Servicio', 'Naviera', 'ETD', 'ETA', 'Estado', 'Prioridad', 'Semáforo',
-  'Pendiente USD', 'Broker', 'Comisión USD', 'Seguro prima USD', 'Estado seguro', 'Cierre', 'Validez',
-  'Agente/Coload', 'Ref cliente'].concat(MILESTONES).concat(['Alertas', 'Creado por', 'Actualizado por', 'Actualizado']);
-const DATE_HEADERS = ['ETD', 'ETA', 'Cierre', 'Validez'].concat(MILESTONES);
-const NUM_HEADERS = ['Pendiente USD', 'Comisión USD', 'Seguro prima USD'];
+// Excel de alimentación (mismo orden y nombres que el Excel del usuario) + columnas de gestión del CRM
+const FEED_HEADERS = ['BROKER', 'COMISION PROPIA', 'OBSERVACION', 'SEGURO.', 'RO', 'CIERRE', 'VALIDEZ', 'SERVICIO',
+  'CONSIGNATARIO', 'REF CLIENTE/PROVEEDOR', 'AGENTE/COLOAD', 'RUTA', 'ETD', 'ETA', 'CANTIDAD', 'NAVIERA'];
+const CRM_HEADERS = ['Estado', 'Prioridad', 'Seguro prima USD', 'Pago cliente', 'Comisión cobrada USD', 'Fecha cobro comisión', 'Alertas'];
+const HEADERS = FEED_HEADERS.concat(CRM_HEADERS).concat(['Creado por', 'Actualizado por', 'Actualizado']);
+const DATE_HEADERS = ['CIERRE', 'VALIDEZ', 'ETD', 'ETA', 'Pago cliente', 'Fecha cobro comisión'];
+const NUM_HEADERS = ['COMISION PROPIA', 'Seguro prima USD', 'Comisión cobrada USD'];
+const REQUIRED_HEADERS = ['RO', 'CIERRE', 'SERVICIO', 'CONSIGNATARIO', 'REF CLIENTE/PROVEEDOR', 'AGENTE/COLOAD', 'RUTA', 'ETD', 'ETA'];
+const SHEET_CLI = 'Clientes';
+const CLI_HEADERS = ['EMPRESA', 'CONTACTO', 'CELULAR', 'CORREO', 'DIRECCION', 'DISTRITO', 'SEMANA'];
 const USER_HEADERS = ['Usuario', 'Nombre', 'Rol', 'Activo', 'Salt', 'Hash', 'Último acceso'];
 const ROLES = ['admin', 'editor', 'lector'];
 
@@ -72,6 +76,11 @@ function setupSheets() {
     const c = heads.indexOf(h) + 1;
     if (c > 0) ops.getRange(2, c, ops.getMaxRows() - 1, 1).setNumberFormat('dd/mm/yyyy');
   });
+
+  const cli = ss.getSheetByName(SHEET_CLI) || ss.insertSheet(SHEET_CLI);
+  if (cli.getLastRow() === 0) cli.appendRow(CLI_HEADERS);
+  cli.getRange(1, 1, 1, CLI_HEADERS.length).setFontWeight('bold').setBackground('#24222c').setFontColor('#ffffff');
+  cli.setFrozenRows(1);
 
   const users = ss.getSheetByName(SHEET_USERS) || ss.insertSheet(SHEET_USERS);
   if (users.getLastRow() === 0) users.appendRow(USER_HEADERS);
@@ -224,6 +233,7 @@ function getData(token) {
   });
   return {
     rows: rows,
+    clientes: readClientes_(),
     config: getConfig_(),
     user: s,
     sheetUrl: s.rol === 'admin' ? ss_().getUrl() : '',
@@ -252,6 +262,8 @@ function createRO(token, obj) {
     const sh = opsSheet_();
     const heads = headers_(sh);
     if (findRoRow_(sh, heads, ro) > 0) throw new Error('Ya existe el RO ' + ro + '.');
+    const faltan = REQUIRED_HEADERS.filter(h => !String(obj[h] == null ? '' : obj[h]).trim());
+    if (faltan.length) throw new Error('Faltan datos obligatorios: ' + faltan.join(', ') + '.');
     obj['Creado por'] = s.usuario;
     obj['Actualizado por'] = s.usuario;
     const row = heads.map(h => h === 'Actualizado' ? new Date() : (h in obj ? toCell_(h, obj[h]) : ''));
@@ -304,5 +316,49 @@ function setConfig(token, key, value) {
   const idx = keys.indexOf(key);
   if (idx >= 0) sh.getRange(idx + 1, 2).setValue(value);
   else sh.appendRow([key, value]);
+  return { ok: true };
+}
+
+// ===================== BD CLIENTES =====================
+function cliSheet_() {
+  const ss = ss_();
+  let sh = ss.getSheetByName(SHEET_CLI);
+  if (!sh) { sh = ss.insertSheet(SHEET_CLI); sh.appendRow(CLI_HEADERS); }
+  return sh;
+}
+
+function readClientes_() {
+  const sh = ss_().getSheetByName(SHEET_CLI);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const heads = headers_(sh);
+  return sh.getRange(2, 1, sh.getLastRow() - 1, heads.length).getValues()
+    .filter(r => String(r[0]).trim())
+    .map(r => { const o = {}; heads.forEach((h, i) => { if (h) o[h] = fmtCell_(r[i]); }); return o; });
+}
+
+function upsertCliente(token, obj, empresaOriginal) {
+  const s = session_(token);
+  requireEditor_(s);
+  const empresa = String(obj && obj.EMPRESA || '').trim();
+  if (!empresa) throw new Error('EMPRESA es obligatorio.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = cliSheet_();
+    const heads = headers_(sh);
+    const col = heads.indexOf('EMPRESA') + 1;
+    const last = sh.getLastRow();
+    const vals = last > 1 ? sh.getRange(2, col, last - 1, 1).getValues().map(r => String(r[0]).trim().toLowerCase()) : [];
+    const buscar = String(empresaOriginal || empresa).trim().toLowerCase();
+    const idx = vals.indexOf(buscar);
+    if (!empresaOriginal && idx >= 0) throw new Error('Ya existe el cliente ' + empresa + '.');
+    const dup = vals.indexOf(empresa.toLowerCase());
+    if (dup >= 0 && dup !== idx) throw new Error('Ya existe el cliente ' + empresa + '.');
+    const row = heads.map(h => (h in obj ? String(obj[h]) : ''));
+    if (idx >= 0) sh.getRange(idx + 2, 1, 1, row.length).setValues([row]);
+    else sh.appendRow(row);
+  } finally {
+    lock.releaseLock();
+  }
   return { ok: true };
 }

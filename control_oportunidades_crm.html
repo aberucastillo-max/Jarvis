@@ -5,74 +5,165 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Control de Oportunidades — CRM Agente de Carga</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  // Tema oscuro minimalista: grises neutros, paneles planos, verde como acción principal
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Manrope', 'system-ui', '-apple-system', 'sans-serif'] },
+    colors: {
+      card: '#1c1c1c', field: '#242424',
+      slate:   { 50:'#222222', 100:'#262626', 200:'#2c2c2c', 300:'#3a3a3a', 400:'#6e6e6e', 500:'#8c8c8c', 600:'#b0b0b0', 700:'#d2d2d2', 800:'#ededed', 900:'#0f0f0f' },
+      sky:     { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
+      emerald: { 50:'#13261b', 100:'#163020', 200:'#1d4a2e', 300:'#3ee88a', 400:'#22dd7a', 500:'#00d26a', 600:'#00c060', 700:'#3ee88a', 800:'#8ff5bd' },
+      amber:   { 50:'#29230f', 100:'#322a11', 200:'#4d4016', 300:'#ffd84d', 400:'#f5c518', 500:'#e0b20f', 600:'#f5c518', 700:'#f5c518', 800:'#ffe08a' },
+      red:     { 50:'#2a1617', 100:'#361b1c', 200:'#552628', 300:'#ff9b9b', 400:'#ff6b6b', 500:'#ff5c5c', 600:'#ff6b6b', 700:'#ff7b7b', 800:'#ffb3b3' },
+      violet:  { 50:'#141f30', 100:'#182841', 200:'#20375c', 300:'#8bbcff', 400:'#5aa0ff', 500:'#3b8bff', 600:'#5aa0ff', 700:'#8bbcff', 800:'#bcd8ff' },
+      orange:  { 100:'#33240f', 300:'#ffb366', 700:'#ffb366' },
+    }
+  } } };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-  .card { box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
-  .row-hover:hover { background: #f8fafc; cursor: pointer; }
-  .bar { transition: width .6s ease; }
-  .fade-in { animation: fadeIn .2s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+  :root { color-scheme: dark; }
+  html { font-size: 14px; }
+  body { font-family: 'Manrope', system-ui, -apple-system, sans-serif; background: #121212 !important; }
+  .card { border: 1px solid #262626; }
+  .btn-primary { background: #00d26a; color: #0d0d0d; font-weight: 600; }
+  .btn-primary:hover { background: #22dd7a; }
+  .row-hover:hover { background: #222222; cursor: pointer; }
+  .bar { transition: width .5s ease; }
+  .fade-in { animation: fadeIn .15s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(3px);} to {opacity:1; transform:none;} }
   .modal-open { overflow: hidden; }
-  select, input { outline: none; }
-  ::-webkit-scrollbar { height: 8px; width: 8px; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  select, input, textarea { outline: none; }
+  input:not([type=checkbox]):not([type=file]), select, textarea { background-color: #242424 !important; color: #ededed; border: 1px solid #2c2c2c !important; }
+  input::placeholder, textarea::placeholder { color: #6e6e6e; }
+  input:focus, select:focus, textarea:focus { border-color: #00d26a !important; }
+  input[type=checkbox] { accent-color: #00d26a; }
+  button { border-radius: 9999px; }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+  .th-filter { width: 100%; min-width: 64px; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0;
+               border-radius: 6px; padding: 3px 8px; }
+  .th-filter.active { border-color: #00d26a !important; }
+  thead.sticky-head th { position: sticky; top: 0; z-index: 2; }
+  .nav-pill { color: #8c8c8c; }
+  .nav-pill.active { background: #ececec; color: #121212; }
+  .nav-pill:not(.active):hover { color: #ededed; }
+  .bnav-item { color: #6e6e6e; }
+  .bnav-item.active { color: #00d26a; }
+  .bnav-item.active .bnav-ico { background: #13261b; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen">
+<body class="bg-slate-100 text-slate-800 min-h-screen pb-24 lg:pb-0">
 
 <!-- HEADER -->
-<header class="bg-slate-900 text-white">
-  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
+<header class="bg-slate-900 text-white border-b border-slate-200">
+  <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-xl">🚢</div>
+      <div class="w-9 h-9 rounded-lg btn-primary flex items-center justify-center text-[11px] font-bold tracking-tight">CRM</div>
       <div>
         <h1 class="text-lg font-semibold leading-tight">Control de Oportunidades</h1>
         <p class="text-xs text-slate-400">CRM · Agente de Carga Internacional · <span id="modeBadge" class="text-sky-300">Cargando…</span></p>
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <button type="button" data-editor onclick="openROForm()" class="text-sm bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-medium">＋ Nuevo RO</button>
-      <a href="gantt_arribos.html" onclick="goTo(pageUrl('gantt')); return false;" class="text-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 rounded-lg font-medium">📅 Calendario de arribos</a>
-      <a id="lnkSheet" href="#" target="_blank" rel="noopener" class="hidden text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Abrir Google Sheet</a>
-      <label id="btnImport" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
+      <button type="button" data-editor onclick="openROForm()" class="text-sm btn-primary px-4 py-1.5 rounded-full font-medium">＋ Nuevo RO</button>
+      <a id="lnkSheet" href="#" target="_blank" rel="noopener" class="hidden text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">Abrir Google Sheet</a>
+      <label id="btnImport" class="text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10 cursor-pointer">
         Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelImport(this)">
       </label>
-      <button onclick="downloadExcel(DATA, 'control_oportunidades.xlsx')" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Descargar Excel</button>
-      <button onclick="exportCSV()" class="text-sm bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Exportar CSV</button>
+      <button onclick="downloadExcel(DATA, 'control_oportunidades.xlsx')" class="hidden sm:inline-block text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">Descargar Excel</button>
+      <button onclick="exportCSV()" class="hidden sm:inline-block text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">Exportar CSV</button>
       <div id="userAvatar" class="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-sm font-semibold">ML</div>
       <button id="btnLogout" type="button" onclick="logoutNow()" class="hidden text-sm text-slate-300 hover:text-white px-2 py-1.5">Salir</button>
     </div>
   </div>
 </header>
 
-<div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:grid lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-6 lg:items-start">
 
-<!-- PANEL VERTICAL IZQUIERDO: ALERTAS -->
-<aside class="mb-6 lg:mb-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto space-y-4">
-  <div class="bg-white rounded-xl card p-4">
-    <h3 class="text-sm font-semibold text-slate-800">Panel de alertas operativas</h3>
-    <p class="text-xs text-slate-500 mt-1">Seguimiento de alertas ETA y operaciones RO sin seguro registrado.</p>
+<!-- NAVEGACIÓN -->
+<nav class="hidden lg:block max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+  <div class="inline-flex gap-1 p-1 rounded-full bg-card card">
+    <button type="button" class="nav-pill active px-5 py-2 text-sm font-medium flex items-center gap-2" data-nav="resumen" onclick="setView('resumen')"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg> Resumen</button>
+    <button type="button" class="nav-pill px-5 py-2 text-sm font-medium flex items-center gap-2" data-nav="operaciones" onclick="setView('operaciones')"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg> Operaciones</button>
+    <button type="button" class="nav-pill px-5 py-2 text-sm font-medium flex items-center gap-2" data-nav="clientes" onclick="setView('clientes')"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg> Clientes</button>
+    <button type="button" class="nav-pill px-5 py-2 text-sm font-medium flex items-center gap-2" onclick="goTo(pageUrl('gantt'))"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Calendario ETD/ETA</button>
+  </div>
+</nav>
+<nav class="lg:hidden fixed bottom-3 inset-x-3 z-40 bg-card card rounded-xl px-2 py-2 flex justify-around">
+  <button type="button" class="bnav-item flex flex-col items-center gap-0.5 text-[10px] active" data-nav="resumen" onclick="setView('resumen')"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Inicio</button><button type="button" class="bnav-item flex flex-col items-center gap-0.5 text-[10px] " data-nav="operaciones" onclick="setView('operaciones')"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>RO</button><button type="button" class="bnav-item flex flex-col items-center gap-0.5 text-[10px] " data-nav="seguimiento" onclick="setView('seguimiento')"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16 14h2"/></svg></span>Cobros</button><button type="button" class="bnav-item flex flex-col items-center gap-0.5 text-[10px] " data-nav="clientes" onclick="setView('clientes')"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg></span>Clientes</button><button type="button" class="bnav-item flex flex-col items-center gap-0.5 text-[10px] " data-nav="calendario" onclick="goTo(pageUrl('gantt'))"><span class="bnav-ico w-11 h-11 rounded-full flex items-center justify-center"><svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>ETD/ETA</button>
+</nav>
+
+<div id="appGrid" class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-4 lg:items-start">
+
+<!-- PANEL VERTICAL IZQUIERDO -->
+<aside id="sidePanel" class="hidden lg:block mb-4 lg:mb-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto space-y-4">
+  <div class="bg-card rounded-xl card p-4">
+    <h3 class="text-sm font-semibold text-slate-800">Seguimiento</h3>
+    <p class="text-xs text-slate-500 mt-1">Cobro de comisiones, alertas ETA, seguro y datos faltantes. Responde a los filtros de la tabla.</p>
   </div>
 
-  <!-- ALERTAS ETA -->
-  <section class="bg-white rounded-xl card p-4">
-    <div class="flex items-center justify-between gap-2 mb-3">
-      <h4 class="text-sm font-semibold text-slate-700">⏱️ Alertas ETA y seguimiento</h4>
-      <span id="etaAlertCount" class="text-xs rounded-full bg-red-50 text-red-700 px-2.5 py-1 whitespace-nowrap">0 alertas</span>
+  <!-- COMISIONES POR COBRAR -->
+  <section class="bg-card rounded-xl card p-4 border-t-4 border-amber-400">
+    <div class="flex items-center justify-between gap-2 mb-1">
+      <h4 class="text-sm font-semibold text-slate-700">Comisiones por cobrar</h4>
+      <span id="cobroCount" class="text-xs rounded-full bg-amber-50 text-amber-800 px-2.5 py-1 whitespace-nowrap">0</span>
     </div>
-    <ul id="etaAlertsList" class="text-sm space-y-2 max-h-72 overflow-y-auto">
-      <li class="text-xs text-slate-400">Sin alertas ETA activas.</li>
-    </ul>
+    <p class="text-xs text-slate-500 mb-3">El cliente ya pagó el servicio: corresponde cobrar la comisión. Ordenado por días de espera.</p>
+    <ul id="listCobrar" class="space-y-2"></ul>
+    <details class="mt-3">
+      <summary class="text-xs text-slate-500 cursor-pointer">Arribadas esperando pago del cliente (<span id="esperaCount">0</span>)</summary>
+      <ul id="listEspera" class="space-y-2 mt-2"></ul>
+    </details>
+
+    <div id="cobroBox" class="hidden mt-4 border border-amber-200 bg-amber-50/60 rounded-lg p-3">
+      <div class="flex items-start justify-between gap-2 mb-3">
+        <div>
+          <h4 class="text-sm font-semibold text-slate-700">Registrar pago / cobro</h4>
+          <p id="cobroLabel" class="text-xs text-slate-500"></p>
+        </div>
+        <button type="button" onclick="closeCobro()" class="text-xs text-slate-500 hover:text-slate-800">Cerrar</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2">
+          <label class="block text-xs text-slate-500 mb-1">Fecha en que el cliente pagó el servicio</label>
+          <input id="cbPagoCliente" type="date" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Comisión cobrada (USD, acumulado)</label>
+          <input id="cbCobrado" type="number" min="0" step="0.01" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Fecha de cobro</label>
+          <input id="cbFechaCobro" type="date" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
+        </div>
+        <p id="cbSaldo" class="col-span-2 text-xs text-slate-600"></p>
+        <button type="button" onclick="saveCobro(false)" class="bg-white/10 hover:bg-white/15 text-slate-800 rounded-full px-3 py-2 text-sm font-medium">Guardar</button>
+        <button type="button" onclick="saveCobro(true)" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-3 py-2 text-sm font-medium">Cobrada total</button>
+      </div>
+      <p id="cobroFeedback" class="text-xs mt-2 text-slate-600" aria-live="polite"></p>
+    </div>
   </section>
 
-  <!-- SEGURO NO CONTRATADO -->
-  <section class="bg-white rounded-xl card p-4">
-    <div class="flex items-center justify-between gap-2 mb-2">
-      <h4 class="text-sm font-semibold text-slate-700">🛡️ RO sin seguro contratado</h4>
-      <span id="uninsuredCount" class="text-xs rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 whitespace-nowrap">0 pendientes</span>
+  <!-- ALERTAS ETA -->
+  <section class="bg-card rounded-xl card p-4">
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <h4 class="text-sm font-semibold text-slate-700">Alertas ETA</h4>
+      <span id="etaAlertCount" class="text-xs rounded-full bg-red-50 text-red-700 px-2.5 py-1 whitespace-nowrap">0 alertas</span>
     </div>
-    <p class="text-xs text-slate-500 mb-3">Registra la prima en USD o confirma expresamente que el cliente no contrató seguro.</p>
+    <ul id="etaAlertsList" class="text-sm space-y-2 max-h-72 overflow-y-auto"></ul>
+  </section>
+
+  <!-- SEGURO SIN DEFINIR -->
+  <section class="bg-card rounded-xl card p-4">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <h4 class="text-sm font-semibold text-slate-700">Seguro sin definir</h4>
+      <span id="uninsuredCount" class="text-xs rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 whitespace-nowrap">0</span>
+    </div>
+    <p class="text-xs text-slate-500 mb-3">SEGURO. vacío: indica si APLICA (con prima) o NO APLICA.</p>
     <ul id="listUninsured" class="space-y-2"></ul>
 
     <div id="insuranceCalculator" class="hidden mt-4 border border-sky-100 bg-sky-50/60 rounded-lg p-3">
@@ -86,188 +177,224 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-slate-500 mb-1">Valor asegurado (USD)</label>
-          <input id="insuredValue" type="number" min="0" step="0.01" placeholder="Ej. 25000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+          <input id="insuredValue" type="number" min="0" step="0.01" placeholder="Ej. 25000" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
         </div>
         <div>
           <label class="block text-xs text-slate-500 mb-1">Tasa (%)</label>
-          <input id="insuranceRate" type="number" min="0" step="0.001" placeholder="Ej. 0.30" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" value="0.30">
+          <input id="insuranceRate" type="number" min="0" step="0.001" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card" value="0.30">
         </div>
         <div class="col-span-2">
           <label class="block text-xs text-slate-500 mb-1">Prima mínima (USD) <span class="text-slate-400">· se guarda</span></label>
-          <input id="insuranceMin" type="number" min="0" step="0.01" placeholder="Ej. 60" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" value="60">
+          <input id="insuranceMin" type="number" min="0" step="0.01" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card" value="60">
         </div>
         <div class="col-span-2">
           <label class="block text-xs text-slate-500 mb-1">Prima estimada (USD)</label>
-          <input id="premiumResult" type="text" readonly class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-100 font-semibold" value="$0.00">
+          <input id="premiumResult" type="text" readonly class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-slate-100 font-semibold" value="$0.00">
           <p id="minApplied" class="hidden text-[11px] text-amber-700 mt-1">Se aplicó la prima mínima.</p>
         </div>
-        <button type="button" onclick="saveCalculatedInsurance()" class="col-span-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-2 text-sm font-medium">Agregar monto USD</button>
-      </div>
-      <div class="mt-3 border-t border-sky-100 pt-3 space-y-2">
-        <p class="text-xs text-slate-500">Si el cliente rechazó el seguro, registra expresamente esa confirmación.</p>
-        <button type="button" onclick="confirmNoInsurance()" class="w-full border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg px-3 py-2 text-sm font-medium">Confirmar: no tiene seguro contratado</button>
+        <button type="button" onclick="saveCalculatedInsurance()" class="col-span-2 bg-sky-600 hover:bg-sky-700 text-white rounded-full px-3 py-2 text-sm font-medium">APLICA · registrar prima</button>
+        <button type="button" onclick="confirmNoInsurance()" class="col-span-2 border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-full px-3 py-2 text-sm font-medium">NO APLICA seguro</button>
       </div>
       <p id="insuranceFeedback" class="text-xs mt-2 text-slate-600" aria-live="polite"></p>
     </div>
   </section>
+
+  <!-- DATOS FALTANTES -->
+  <section class="bg-card rounded-xl card p-4">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <h4 class="text-sm font-semibold text-slate-700">Datos faltantes</h4>
+      <span id="faltaCount" class="text-xs rounded-full bg-red-50 text-red-700 px-2.5 py-1 whitespace-nowrap">0</span>
+    </div>
+    <p class="text-xs text-slate-500 mb-3"><span class="text-red-600 font-medium">Rojo</span>: obligatorio (nunca vacío). <span class="text-amber-700 font-medium">Ámbar</span>: importante.</p>
+    <ul id="listFaltantes" class="space-y-2 max-h-80 overflow-y-auto"></ul>
+  </section>
 </aside>
 
 <main class="min-w-0">
+  <div id="importFeedback" class="hidden mb-4 rounded-full px-4 py-2 text-sm"></div>
 
-  <div id="importFeedback" class="hidden mb-4 rounded-lg px-4 py-2 text-sm"></div>
-
-  <!-- FILTROS -->
-  <section class="bg-white rounded-xl card p-4 mb-6">
-    <div class="flex flex-wrap items-end gap-3">
-      <div class="flex-1 min-w-[180px]">
-        <label class="block text-xs font-medium text-slate-500 mb-1">Buscar (RO / Ref)</label>
-        <input id="fSearch" type="text" placeholder="Ej. 2024-03 o IMP-2024-089"
-               class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500" />
-      </div>
-      <div><label class="block text-xs font-medium text-slate-500 mb-1">Ruta</label>
-        <select id="fRuta" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[130px]"><option value="">Todas</option></select></div>
-      <div><label class="block text-xs font-medium text-slate-500 mb-1">Naviera</label>
-        <select id="fNaviera" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[120px]"><option value="">Todas</option></select></div>
-      <div><label class="block text-xs font-medium text-slate-500 mb-1">Broker</label>
-        <select id="fBroker" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[130px]"><option value="">Todos</option></select></div>
-      <div><label class="block text-xs font-medium text-slate-500 mb-1">Servicio</label>
-        <select id="fServicio" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[110px]"><option value="">Todos</option></select></div>
-      <div><label class="block text-xs font-medium text-slate-500 mb-1">Estado</label>
-        <select id="fEstado" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[110px]">
-          <option value="">Todos</option><option>ABIERTA</option><option>GANADA</option><option>PERDIDA</option><option>CERRADA</option>
-        </select></div>
-      <button onclick="resetFilters()" class="text-sm text-slate-500 hover:text-slate-800 px-3 py-2">Limpiar</button>
+  <!-- TOTALIZADORES -->
+  <section data-view="resumen" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-4">
+    <div class="bg-card rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Operaciones (RO)</p>
+      <p id="kRO" class="text-xl font-semibold mt-0.5">0</p>
+      <p id="kROsub" class="text-xs text-slate-500 mt-1"></p>
+    </div>
+    <div class="bg-card rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Comisión propia</p>
+      <p id="kCom" class="text-xl font-semibold mt-0.5">$0</p>
+      <p id="kComSub" class="text-xs text-slate-500 mt-1"></p>
+    </div>
+    <div class="bg-card rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Comisión cobrada</p>
+      <p id="kCob" class="text-xl font-semibold mt-0.5 text-emerald-700">$0</p>
+      <p id="kCobSub" class="text-xs text-slate-500 mt-1"></p>
+    </div>
+    <div class="bg-card rounded-xl card p-4 border-l-4 border-amber-400">
+      <p class="text-xs font-medium text-slate-500">Lista para cobrar</p>
+      <p id="kLista" class="text-xl font-semibold mt-0.5 text-amber-700">$0</p>
+      <p id="kListaSub" class="text-xs text-slate-500 mt-1"></p>
+    </div>
+    <div class="bg-card rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Espera pago cliente</p>
+      <p id="kEspera" class="text-xl font-semibold mt-0.5">$0</p>
+      <p id="kEsperaSub" class="text-xs text-slate-500 mt-1"></p>
+    </div>
+    <div class="bg-card rounded-xl card p-4">
+      <p class="text-xs font-medium text-slate-500">Seguro (SEGURO.)</p>
+      <p id="kSeg" class="text-xl font-semibold mt-0.5">0%</p>
+      <p id="kSegSub" class="text-xs text-slate-500 mt-1"></p>
     </div>
   </section>
 
-  <!-- KPIs -->
-  <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-    <div class="bg-white rounded-xl card p-4">
-      <p class="text-xs font-medium text-slate-500">Pendiente total</p>
-      <p id="kpiPendiente" class="text-2xl font-semibold mt-1">$0</p>
-      <p class="text-xs text-emerald-600 mt-1">▲ 12% vs. mes anterior</p>
+  <!-- RESUMEN POR MES DE CIERRE -->
+  <section data-view="resumen" class="bg-card rounded-xl card overflow-hidden mb-4">
+    <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+      <h3 class="text-sm font-semibold text-slate-800">Resumen por mes de cierre</h3>
+      <span class="text-xs text-slate-500">Click en un mes para filtrar la tabla</span>
     </div>
-    <div class="bg-white rounded-xl card p-4">
-      <p class="text-xs font-medium text-slate-500">% Asegurado</p>
-      <p id="kpiAsegurado" class="text-2xl font-semibold mt-1">0%</p>
-      <p class="text-xs text-emerald-600 mt-1">▲ 5 pts</p>
-    </div>
-    <div class="bg-white rounded-xl card p-4">
-      <p class="text-xs font-medium text-slate-500">Cotiz. vencidas</p>
-      <p id="kpiVencidas" class="text-2xl font-semibold mt-1">0</p>
-      <p class="text-xs text-red-600 mt-1">▼ 3</p>
-    </div>
-    <div class="bg-white rounded-xl card p-4">
-      <p class="text-xs font-medium text-slate-500">Comisión</p>
-      <p id="kpiComision" class="text-2xl font-semibold mt-1">$0</p>
-      <p class="text-xs text-emerald-600 mt-1">▲ 8%</p>
-    </div>
-    <div class="bg-white rounded-xl card p-4">
-      <p class="text-xs font-medium text-slate-500">Oport. abiertas</p>
-      <p id="kpiAbiertas" class="text-2xl font-semibold mt-1">0</p>
-      <p class="text-xs text-slate-500 mt-1">en pipeline</p>
-    </div>
-  </section>
-
-  <!-- SEMÁFORO GLOBAL -->
-  <section class="bg-white rounded-xl card px-4 py-3 mb-6 flex flex-wrap items-center gap-4 text-sm">
-    <span class="font-medium text-slate-600">Semáforo global:</span>
-    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span id="cntVerde">0</span> ok</span>
-    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><span id="cntAmbar">0</span> atención</span>
-    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><span id="cntRojo">0</span> críticas</span>
-  </section>
-
-  <!-- TABLA -->
-  <section class="bg-white rounded-xl card overflow-hidden mb-6">
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
           <tr>
-            <th class="text-left px-4 py-3 font-medium">RO</th>
-            <th class="text-left px-4 py-3 font-medium">Consignatario</th>
-            <th class="text-left px-4 py-3 font-medium">Ruta</th>
-            <th class="text-left px-4 py-3 font-medium">Servicio</th>
-            <th class="text-left px-4 py-3 font-medium">Naviera</th>
-            <th class="text-left px-4 py-3 font-medium">ETD</th>
-            <th class="text-left px-4 py-3 font-medium">ETA</th>
-            <th class="text-center px-4 py-3 font-medium">Prioridad</th>
-            <th class="text-center px-4 py-3 font-medium">🚦</th>
-            <th class="text-right px-4 py-3 font-medium">Pendiente</th>
+            <th class="text-left px-4 py-2 font-medium">Mes de cierre</th>
+            <th class="text-right px-4 py-2 font-medium">RO</th>
+            <th class="text-right px-4 py-2 font-medium">Comisión</th>
+            <th class="text-right px-4 py-2 font-medium">Cobrada</th>
+            <th class="text-right px-4 py-2 font-medium">Lista p/ cobrar</th>
+            <th class="text-right px-4 py-2 font-medium">Espera pago cliente</th>
+            <th class="text-left px-4 py-2 font-medium min-w-[140px]">% cobrado</th>
+            <th class="text-right px-4 py-2 font-medium">Seguro s/definir</th>
+            <th class="text-right px-4 py-2 font-medium">Datos faltantes</th>
           </tr>
         </thead>
-        <tbody id="tbody" class="divide-y divide-slate-100"></tbody>
+        <tbody id="tbodyMes" class="divide-y divide-slate-100"></tbody>
+        <tfoot id="tfootMes" class="bg-slate-50 font-semibold text-slate-700"></tfoot>
       </table>
     </div>
-    <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+  </section>
+
+  <!-- TABLA PRINCIPAL CON FILTROS EN EL ENCABEZADO -->
+  <section data-view="operaciones" class="bg-card rounded-xl card overflow-hidden mb-4">
+    <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 text-sm">
+      <div class="flex flex-wrap items-center gap-4">
+        <h3 class="font-semibold text-slate-800">Operaciones</h3>
+        <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer"><input id="chkAgrupar" type="checkbox" checked class="rounded border-slate-300 text-sky-600"> Agrupar por mes de cierre</label>
+        <span class="flex items-center gap-3 text-xs text-slate-500">
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span id="cntVerde">0</span></span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><span id="cntAmbar">0</span></span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><span id="cntRojo">0</span></span>
+        </span>
+      </div>
+      <button type="button" onclick="clearFilters()" class="text-xs text-sky-700 hover:underline">Limpiar filtros</button>
+    </div>
+    <div class="overflow-auto max-h-[75vh]">
+      <table class="w-full text-sm">
+        <thead id="theadMain" class="sticky-head text-slate-500 text-xs uppercase tracking-wide"></thead>
+        <tbody id="tbody" class="divide-y divide-slate-100"></tbody>
+        <tfoot id="tfootMain" class="bg-slate-50 font-semibold text-slate-700 text-sm"></tfoot>
+      </table>
+    </div>
+    <div class="px-4 py-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
       <span id="footerCount">Mostrando 0 oportunidades</span>
-      <span>Click en una fila para ver el detalle · <button type="button" onclick="restoreSample()" class="underline hover:text-slate-700">Restablecer datos de ejemplo</button></span>
+      <span>🚦 rojo: falta dato obligatorio o comisión lista &gt; 30 días · ámbar: falta dato importante, comisión por cobrar o cliente sin pagar &gt; 30 días desde ETA ·
+        <button type="button" onclick="restoreSample()" class="underline hover:text-slate-700">Restablecer datos de ejemplo</button></span>
     </div>
   </section>
 
   <!-- ANÁLISIS -->
-  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-    <div class="bg-white rounded-xl card p-4">
-      <h3 class="text-sm font-semibold text-slate-700 mb-3">Top rutas por pendiente</h3>
-      <div id="chartRutas" class="space-y-2"></div>
-    </div>
-    <div class="bg-white rounded-xl card p-4">
-      <h3 class="text-sm font-semibold text-slate-700 mb-3">Comisión por broker</h3>
+  <section data-view="resumen" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="bg-card rounded-xl card p-4">
+      <h3 class="text-sm font-semibold text-slate-700 mb-1">Comisión por broker</h3>
+      <p class="text-[11px] text-slate-500 mb-3"><span class="inline-block w-2 h-2 rounded-sm bg-emerald-500"></span> cobrada · <span class="inline-block w-2 h-2 rounded-sm bg-amber-400"></span> lista · <span class="inline-block w-2 h-2 rounded-sm bg-violet-400"></span> espera pago cliente</p>
       <div id="chartBrokers" class="space-y-2"></div>
     </div>
-    <div class="bg-white rounded-xl card p-4">
-      <h3 class="text-sm font-semibold text-slate-700 mb-3">Cumplimiento ETD/ETA</h3>
-      <div class="flex h-4 rounded-full overflow-hidden mb-3">
-        <div class="bg-emerald-500" style="width:68%"></div>
-        <div class="bg-amber-500" style="width:22%"></div>
-        <div class="bg-red-500" style="width:10%"></div>
-      </div>
-      <ul class="text-xs space-y-1.5 text-slate-600">
-        <li class="flex justify-between"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>On-time</span><span class="font-medium">68%</span></li>
-        <li class="flex justify-between"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>+1 a +3 días</span><span class="font-medium">22%</span></li>
-        <li class="flex justify-between"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-500"></span>+3 días</span><span class="font-medium">10%</span></li>
-      </ul>
+    <div class="bg-card rounded-xl card p-4">
+      <h3 class="text-sm font-semibold text-slate-700 mb-1">Antigüedad del cobro pendiente</h3>
+      <p class="text-[11px] text-slate-500 mb-3">Días desde que el cliente pagó, sin cobrar la comisión</p>
+      <div id="chartAging" class="space-y-2"></div>
+    </div>
+    <div class="bg-card rounded-xl card p-4">
+      <h3 class="text-sm font-semibold text-slate-700 mb-1">Calidad de datos</h3>
+      <p class="text-[11px] text-slate-500 mb-3">RO con el campo vacío</p>
+      <div id="chartCalidad" class="space-y-2"></div>
     </div>
   </section>
 
-  <p class="text-xs text-slate-400 mt-6 text-center">⚠️ La columna <b>PENDIENTE</b> permanece visible hasta confirmar si es la que deseas eliminar.</p>
+  <!-- BD CLIENTES -->
+  <section data-view="clientes" class="hidden space-y-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Clientes en BD</p><p id="ckTotal" class="text-xl font-semibold mt-0.5">0</p><p id="ckTotalSub" class="text-xs text-slate-500 mt-1"></p></div>
+      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Con operaciones</p><p id="ckActivos" class="text-xl font-semibold mt-0.5">0</p><p id="ckActivosSub" class="text-xs text-slate-500 mt-1"></p></div>
+      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Semana actual</p><p id="ckSemana" class="text-xl font-semibold mt-0.5">0</p><p id="ckSemanaSub" class="text-xs text-slate-500 mt-1"></p></div>
+      <div class="bg-card rounded-xl card p-4"><p class="text-xs text-slate-500">Sin ficha en BD</p><p id="ckSinFicha" class="text-xl font-semibold mt-0.5 text-amber-700">0</p><p class="text-xs text-slate-500 mt-1">consignatarios con RO</p></div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div class="bg-card rounded-xl card p-4 xl:col-span-2">
+        <h3 class="text-sm font-semibold text-slate-700 mb-1">Ranking de clientes por comisión</h3>
+        <p class="text-[11px] text-slate-500 mb-3"><span class="inline-block w-2 h-2 rounded-sm bg-emerald-500"></span> cobrada · <span class="inline-block w-2 h-2 rounded-sm bg-amber-400"></span> por cobrar · click para ver la ficha</p>
+        <div id="chartClientes" class="space-y-2.5"></div>
+      </div>
+      <div class="bg-card rounded-xl card p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-1">Consignatarios sin ficha</h3>
+        <p class="text-[11px] text-slate-500 mb-3">Tienen RO pero no están en la BD de clientes</p>
+        <ul id="listSinFicha" class="space-y-2 max-h-80 overflow-y-auto"></ul>
+      </div>
+    </div>
+
+    <div class="bg-card rounded-xl card overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div class="flex items-center gap-3"><h3 class="font-semibold text-slate-800">BD Clientes</h3><span id="cliCount" class="text-xs text-slate-500"></span></div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" data-editor onclick="openClienteForm()" class="text-xs btn-primary px-4 py-1.5 font-medium">＋ Nuevo cliente</button>
+          <label id="btnImportCli" class="text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-full cursor-pointer">Importar clientes<input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleClientesImport(this)"></label>
+          <button type="button" onclick="clearCliFilters()" class="text-xs text-sky-700 hover:underline px-2">Limpiar filtros</button>
+        </div>
+      </div>
+      <div class="overflow-auto max-h-[70vh]">
+        <table class="w-full text-sm">
+          <thead id="theadCli" class="sticky-head text-slate-500 text-xs uppercase tracking-wide"></thead>
+          <tbody id="tbodyCli" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>
 </div>
 
 <!-- MODAL DETALLE -->
 <div id="modal" class="hidden fixed inset-0 z-50">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeModal()"></div>
-  <div class="relative max-w-3xl mx-auto my-8 bg-white rounded-xl shadow-xl fade-in max-h-[90vh] overflow-y-auto">
-    <div class="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-xl">
+  <div class="relative max-w-3xl mx-auto my-8 bg-card rounded-xl shadow-xl card fade-in max-h-[90vh] overflow-y-auto">
+    <div class="sticky top-0 bg-card border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-xl">
       <div>
         <h2 id="mTitle" class="text-lg font-semibold">—</h2>
         <p id="mSub" class="text-xs text-slate-500">—</p>
       </div>
       <div class="flex items-center gap-3">
-        <button id="btnEditRO" type="button" data-editor onclick="editFromModal()" class="text-xs border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-1 text-slate-600">✏️ Editar</button>
+        <button id="btnEditRO" type="button" data-editor onclick="editFromModal()" class="text-xs border border-slate-200 hover:bg-slate-50 rounded-full px-3 py-1 text-slate-600">Editar</button>
         <span id="mEstado" class="text-xs font-semibold rounded-full px-3 py-1"></span>
         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
       </div>
     </div>
-    <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Comercial</h4>
         <dl id="mComercial" class="text-sm space-y-1.5"></dl>
-        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-4 mb-2">Financiero</h4>
-        <dl id="mFinanciero" class="text-sm space-y-1.5"></dl>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-4 mb-2">Cobro de comisión</h4>
+        <dl id="mCobro" class="text-sm space-y-1.5"></dl>
       </div>
       <div>
         <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Operativo</h4>
         <dl id="mOperativo" class="text-sm space-y-1.5"></dl>
       </div>
       <div class="md:col-span-2">
-        <div class="flex items-center justify-between mb-2">
-          <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400">⏱️ Timeline</h4>
-          <span id="mHitoActual" class="text-xs font-medium"></span>
-        </div>
-        <ul id="mTimeline" class="text-sm space-y-1.5"></ul>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">ETD → ETA → pago cliente → cobro</h4>
+        <ul id="mTimeline" class="text-sm grid grid-cols-2 sm:grid-cols-4 gap-2"></ul>
       </div>
       <div class="md:col-span-2">
-        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">🔔 Alertas activas</h4>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Alertas</h4>
         <ul id="mAlertas" class="text-sm space-y-1.5"></ul>
       </div>
     </div>
@@ -277,20 +404,69 @@
 <!-- MODAL REGISTRO / EDICIÓN DE RO -->
 <div id="roModal" class="hidden fixed inset-0 z-50">
   <div class="absolute inset-0 bg-slate-900/50" onclick="closeROForm()"></div>
-  <form id="roForm" novalidate onsubmit="submitROForm(event)" class="relative max-w-3xl mx-auto my-4 sm:my-8 bg-white rounded-xl shadow-xl fade-in max-h-[94vh] overflow-y-auto">
-    <div class="sticky top-0 z-10 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-xl">
+  <form id="roForm" novalidate onsubmit="submitROForm(event)" class="relative max-w-3xl mx-auto my-4 sm:my-8 bg-card rounded-xl shadow-xl card fade-in max-h-[94vh] overflow-y-auto">
+    <div class="sticky top-0 z-10 bg-card border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-xl">
       <div>
         <h2 id="roFormTitle" class="text-lg font-semibold">Nuevo RO</h2>
-        <p class="text-xs text-slate-500">Los campos con * son obligatorios. Las fechas del timeline se completan a medida que avanza la carga.</p>
+        <p class="text-xs text-slate-500"><span class="text-red-600 font-semibold">*</span> obligatorio (nunca vacío) · <span class="text-amber-600 font-semibold">●</span> importante</p>
       </div>
       <button type="button" onclick="closeROForm()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
     </div>
     <div id="roFormBody" class="p-5 space-y-5"></div>
-    <div class="sticky bottom-0 bg-white border-t border-slate-100 px-5 py-3 flex flex-wrap items-center justify-between gap-3 rounded-b-xl">
+    <div class="sticky bottom-0 bg-card border-t border-slate-100 px-5 py-3 flex flex-wrap items-center justify-between gap-3 rounded-b-xl">
       <p id="roFormError" class="text-xs text-red-600"></p>
       <div class="flex gap-2 ml-auto">
-        <button type="button" onclick="closeROForm()" class="text-sm border border-slate-200 hover:bg-slate-50 rounded-lg px-4 py-2">Cancelar</button>
-        <button id="roFormSave" type="submit" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 font-medium">Guardar RO</button>
+        <button type="button" onclick="closeROForm()" class="text-sm border border-slate-200 hover:bg-slate-50 rounded-full px-4 py-2">Cancelar</button>
+        <button id="roFormSave" type="submit" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-4 py-2 font-medium">Registrar RO</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- MODAL FICHA DE CLIENTE -->
+<div id="cliModal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-slate-900/70" onclick="closeCliModal()"></div>
+  <div class="relative max-w-4xl mx-auto my-6 bg-card rounded-xl shadow-xl card fade-in max-h-[92vh] overflow-y-auto">
+    <div class="sticky top-0 z-10 bg-card border-b border-slate-200 px-5 py-4 flex flex-wrap items-center justify-between gap-3 rounded-t-xl">
+      <div class="min-w-0">
+        <h2 id="cfTitle" class="text-lg font-semibold truncate">—</h2>
+        <p id="cfSub" class="text-xs text-slate-500">—</p>
+      </div>
+      <div class="flex items-center gap-2" id="cfActions"></div>
+    </div>
+    <div class="p-5 space-y-5">
+      <div id="cfKpis" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="rounded-lg bg-slate-50 p-4"><h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Rutas</h4><div id="cfRutas" class="space-y-2"></div></div>
+        <div class="rounded-lg bg-slate-50 p-4"><h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Servicios · Navieras · Brokers</h4><div id="cfMix" class="space-y-3 text-sm"></div></div>
+        <div class="rounded-lg bg-slate-50 p-4"><h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">RO por mes de cierre</h4><div id="cfMeses" class="flex items-end gap-1.5 h-32"></div></div>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Operaciones</h4>
+        <div class="overflow-x-auto rounded-lg border border-slate-200">
+          <table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500 text-xs uppercase"><tr>
+            <th class="text-left px-3 py-2">RO</th><th class="text-left px-3 py-2">Cierre</th><th class="text-left px-3 py-2">Ruta</th><th class="text-left px-3 py-2">Servicio</th><th class="text-left px-3 py-2">ETA</th><th class="text-right px-3 py-2">Comisión</th><th class="text-left px-3 py-2">Cobro</th>
+          </tr></thead><tbody id="cfRO" class="divide-y divide-slate-100"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FORMULARIO DE CLIENTE -->
+<div id="cliFormModal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-slate-900/70" onclick="closeClienteForm()"></div>
+  <form id="cliForm" novalidate onsubmit="submitClienteForm(event)" class="relative max-w-2xl mx-auto my-8 bg-card rounded-xl shadow-xl card fade-in">
+    <div class="border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+      <h2 id="cliFormTitle" class="text-lg font-semibold">Nuevo cliente</h2>
+      <button type="button" onclick="closeClienteForm()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="cliFormBody" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    <div class="border-t border-slate-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+      <p id="cliFormError" class="text-xs text-red-600"></p>
+      <div class="flex gap-2 ml-auto">
+        <button type="button" onclick="closeClienteForm()" class="text-sm border border-slate-200 hover:bg-slate-50 px-4 py-2">Cancelar</button>
+        <button id="cliFormSave" type="submit" class="text-sm btn-primary px-5 py-2 font-medium">Guardar cliente</button>
       </div>
     </div>
   </form>
@@ -298,50 +474,74 @@
 
 <script>
 // ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
-const MILESTONES = ['Booking confirmado','Gate-in','Loaded','In transit','Discharged','Delivered'];
-const MILESTONE_COLORS = {
-  'Sin booking':'#cbd5e1', 'Booking confirmado':'#94a3b8', 'Gate-in':'#8b5cf6', 'Loaded':'#0ea5e9',
-  'In transit':'#2563eb', 'Discharged':'#f59e0b', 'Delivered':'#10b981'
-};
-const STORAGE_KEY = 'crm_oportunidades_data_v1';
+const STORAGE_KEY = 'crm_oportunidades_data_v3';
 
-// [clave interna, encabezado en Excel, tipo]
-const EXCEL_COLUMNS = [
-  ['ro','RO','text'], ['consignatario','Consignatario','text'], ['ruta','Ruta','text'], ['servicio','Servicio','text'],
-  ['naviera','Naviera','text'], ['etd','ETD','date'], ['eta','ETA','date'], ['estado','Estado','estado'],
-  ['prioridad','Prioridad','prioridad'], ['sem','Semáforo','sem'], ['pendiente','Pendiente USD','num'],
-  ['broker','Broker','text'], ['comision','Comisión USD','num'], ['seguro','Seguro prima USD','num'],
-  ['seguroEstado','Estado seguro','seguroEstado'], ['cierre','Cierre','date'], ['validez','Validez','date'],
-  ['agente','Agente/Coload','text'], ['ref','Ref cliente','text'],
-  ...MILESTONES.map(m => ['hito:' + m, m, 'date']),
-  ['alertas','Alertas','alertas'],
+// Excel de alimentación: [clave interna, encabezado EXACTO en el Excel, tipo, nivel, alias aceptados al importar]
+//   nivel: 'obligatorio' = nunca vacío · 'importante' = importante pero no siempre tiene · '' = no importante
+const FEED_COLUMNS = [
+  ['broker',        'BROKER',                'text',   'importante',  ['Broker']],
+  ['comision',      'COMISION PROPIA',       'num',    'importante',  ['Comisión USD', 'Comision', 'Comisión propia']],
+  ['observacion',   'OBSERVACION',           'text',   '',            ['Observaciones', 'Observación']],
+  ['seguroAplica',  'SEGURO.',               'seguro', 'importante',  ['Seguro', 'Estado seguro']],
+  ['ro',            'RO',                    'text',   'obligatorio', []],
+  ['cierre',        'CIERRE',                'date',   'obligatorio', []],
+  ['validez',       'VALIDEZ',               'date',   '',            []],
+  ['servicio',      'SERVICIO',              'text',   'obligatorio', []],
+  ['consignatario', 'CONSIGNATARIO',         'text',   'obligatorio', []],
+  ['ref',           'REF CLIENTE/PROVEEDOR', 'text',   'obligatorio', ['Ref cliente', 'Ref']],
+  ['agente',        'AGENTE/COLOAD',         'text',   'obligatorio', []],
+  ['ruta',          'RUTA',                  'text',   'obligatorio', []],
+  ['etd',           'ETD',                   'date',   'obligatorio', []],
+  ['eta',           'ETA',                   'date',   'obligatorio', []],
+  ['cantidad',      'CANTIDAD',              'text',   '',            []],
+  ['naviera',       'NAVIERA',               'text',   '',            []],
 ];
+// Columnas de gestión que agrega el CRM a la derecha (opcionales en el Excel de alimentación)
+const CRM_COLUMNS = [
+  ['estado',           'Estado',               'estado',    '', []],
+  ['prioridad',        'Prioridad',            'prioridad', '', []],
+  ['seguroPrima',      'Seguro prima USD',     'num',       '', []],
+  // Cobro de la comisión propia: se cobra DESPUÉS de que el cliente paga el servicio
+  ['fechaPagoCliente', 'Pago cliente',         'date',      '', ['Fecha pago cliente']],
+  ['cobrado',          'Comisión cobrada USD', 'num',       '', ['Cobrado USD', 'Cobrado']],
+  ['fechaCobro',       'Fecha cobro comisión', 'date',      '', ['Fecha cobro']],
+  ['alertas',          'Alertas',              'alertas',   '', []],
+];
+const EXCEL_COLUMNS = [...FEED_COLUMNS, ...CRM_COLUMNS];
+const LABELS = Object.fromEntries(EXCEL_COLUMNS.map(c => [c[0], c[1]]));
+const REQUIRED_KEYS = FEED_COLUMNS.filter(c => c[3] === 'obligatorio').map(c => c[0]);
+const IMPORTANT_KEYS = FEED_COLUMNS.filter(c => c[3] === 'importante').map(c => c[0]);
 
+// Datos de ejemplo (referidos a fines de nov-2026)
 const SAMPLE_DATA = [
-  { ro:'2024-01', consignatario:'ACME SAC', ruta:'LIM→SHA', servicio:'FCL', naviera:'Maersk', etd:'18/11/2024', eta:'12/12/2024', sem:'verde', prioridad:false, pendiente:4200,
-    broker:'ABC Brokers', comision:850, seguro:210, cierre:'10/11/2024', validez:'30/11/2024', agente:'—', ref:'ACME-2024-101', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'18/11/2024','In transit':'19/11/2024'}, alertas:[] },
-  { ro:'2024-02', consignatario:'Global Trade Perú', ruta:'LIM→RTM', servicio:'LCL', naviera:'MSC', etd:'20/11/2024', eta:'20/12/2024', sem:'ambar', prioridad:true, pendiente:1850,
-    broker:'XYZ Corp', comision:320, seguro:95, cierre:'12/11/2024', validez:'22/11/2024', agente:'Rotterdam Agent', ref:'GTP-2024-088', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'16/11/2024','Loaded':'20/11/2024','In transit':'21/11/2024'}, alertas:['VALIDEZ vence en 3 días'] },
-  { ro:'2024-03', consignatario:'Import del Sur', ruta:'LIM→HAM', servicio:'FCL', naviera:'CMA CGM', etd:'15/11/2024', eta:'08/12/2024', sem:'rojo', prioridad:true, pendiente:6300,
-    broker:'ABC Brokers', comision:850, seguro:420, cierre:'10/11/2024', validez:'25/11/2024', agente:'Hansa Agent GmbH', ref:'IMP-2024-089', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'10/11/2024','Gate-in':'13/11/2024','Loaded':'15/11/2024','In transit':'16/11/2024'}, alertas:['VALIDEZ vencida hace 2 días','PENDIENTE > 60 días — escalar a cobranza','ETA desviada +2 días'] },
-  { ro:'2024-04', consignatario:'Comercial Andina', ruta:'LIM→MIA', servicio:'Aéreo', naviera:'LATAM', etd:'19/11/2024', eta:'21/11/2024', sem:'verde', prioridad:false, pendiente:980,
-    broker:'Global Log', comision:140, seguro:45, cierre:'14/11/2024', validez:'28/11/2024', agente:'—', ref:'AND-2024-014', estado:'CERRADA',
-    hitos:{'Booking confirmado':'14/11/2024','Gate-in':'18/11/2024','Loaded':'19/11/2024','In transit':'19/11/2024','Discharged':'21/11/2024','Delivered':'22/11/2024'}, alertas:[] },
-  { ro:'2024-05', consignatario:'Distribuidora XYZ', ruta:'LIM→BUE', servicio:'FCL', naviera:'Hapag', etd:'21/11/2024', eta:'15/12/2024', sem:'ambar', prioridad:true, pendiente:3450,
-    broker:'XYZ Corp', comision:410, seguro:180, cierre:'15/11/2024', validez:'24/11/2024', agente:'—', ref:'DXYZ-2024-032', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'15/11/2024','Gate-in':'19/11/2024','Loaded':'21/11/2024'}, alertas:['VALIDEZ vence en 1 día'] },
-  { ro:'2024-06', consignatario:'Textiles Unidos', ruta:'LIM→VLC', servicio:'LCL', naviera:'ONE', etd:'14/11/2024', eta:'10/12/2024', sem:'rojo', prioridad:true, pendiente:2100,
-    broker:'Global Log', comision:260, seguro:0, cierre:'08/11/2024', validez:'20/11/2024', agente:'Valencia Agent', ref:'TXT-2024-076', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'08/11/2024','Gate-in':'11/11/2024','Loaded':'14/11/2024','In transit':'15/11/2024'}, alertas:['Sin seguro registrado','PENDIENTE > 60 días','ETA desviada +3 días'] },
-  { ro:'2024-07', consignatario:'Agroexport S.A.', ruta:'LIM→QING', servicio:'FCL', naviera:'Maersk', etd:'22/11/2024', eta:'28/12/2024', sem:'verde', prioridad:false, pendiente:5600,
-    broker:'ABC Brokers', comision:920, seguro:280, cierre:'16/11/2024', validez:'02/12/2024', agente:'Qingdao Partner', ref:'AGRO-2024-045', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'16/11/2024','Gate-in':'20/11/2024'}, alertas:[] },
-  { ro:'2024-08', consignatario:'Minera del Norte', ruta:'LIM→BUS', servicio:'FCL', naviera:'MSC', etd:'17/11/2024', eta:'14/12/2024', sem:'ambar', prioridad:true, pendiente:8200,
-    broker:'XYZ Corp', comision:1100, seguro:390, cierre:'11/11/2024', validez:'23/11/2024', agente:'—', ref:'MIN-2024-051', estado:'ABIERTA',
-    hitos:{'Booking confirmado':'11/11/2024','Gate-in':'14/11/2024','Loaded':'17/11/2024','In transit':'18/11/2024'}, alertas:['PENDIENTE 30–60 días'] },
+  { broker:'ABC Brokers', comision:600, observacion:'', seguroAplica:'APLICA', ro:'2026-099', cierre:'25/08/2026', validez:'05/09/2026', servicio:'FCL', consignatario:'Importadora Lima', ref:'IL-4410', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'20/08/2026', eta:'25/09/2026', cantidad:'1x40HC', naviera:'COSCO',
+    estado:'CERRADA', prioridad:false, seguroPrima:150, fechaPagoCliente:'30/09/2026', cobrado:300, fechaCobro:'15/10/2026', alertas:[] },
+  { broker:'XYZ Corp', comision:780, observacion:'Cliente pagó, falta cobrar', seguroAplica:'APLICA', ro:'2026-100', cierre:'20/08/2026', validez:'31/08/2026', servicio:'FCL', consignatario:'Electro Andes', ref:'EA-2210', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'28/08/2026', eta:'01/10/2026', cantidad:'2x40HC', naviera:'ONE',
+    estado:'CERRADA', prioridad:true, seguroPrima:240, fechaPagoCliente:'03/10/2026', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'ABC Brokers', comision:850, observacion:'Cliente frecuente', seguroAplica:'APLICA', ro:'2026-101', cierre:'05/09/2026', validez:'20/09/2026', servicio:'FCL', consignatario:'ACME SAC', ref:'ACME-PO-7781', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'28/09/2026', eta:'02/11/2026', cantidad:'2x40HC', naviera:'Maersk',
+    estado:'CERRADA', prioridad:false, seguroPrima:210, fechaPagoCliente:'06/11/2026', cobrado:850, fechaCobro:'15/11/2026', alertas:[] },
+  { broker:'XYZ Corp', comision:320, observacion:'', seguroAplica:'NO APLICA', ro:'2026-102', cierre:'18/09/2026', validez:'30/09/2026', servicio:'LCL', consignatario:'Global Trade Perú', ref:'GTP-088', agente:'Rotterdam Coload', ruta:'RTM→CAL', etd:'08/10/2026', eta:'14/11/2026', cantidad:'6 CBM', naviera:'MSC',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'20/11/2026', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'', comision:0, observacion:'Broker por definir', seguroAplica:'', ro:'2026-103', cierre:'29/09/2026', validez:'15/10/2026', servicio:'FCL', consignatario:'Import del Sur', ref:'IDS-2201', agente:'Hansa Agent GmbH', ruta:'HAM→CAL', etd:'20/10/2026', eta:'28/11/2026', cantidad:'1x20GP', naviera:'Hapag',
+    estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +2 días'] },
+  { broker:'Global Log', comision:140, observacion:'', seguroAplica:'APLICA', ro:'2026-104', cierre:'03/10/2026', validez:'18/10/2026', servicio:'Aéreo', consignatario:'Comercial Andina', ref:'AND-014', agente:'Miami Air Agent', ruta:'MIA→LIM', etd:'24/11/2026', eta:'25/11/2026', cantidad:'320 kg', naviera:'LATAM',
+    estado:'ABIERTA', prioridad:false, seguroPrima:45, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'XYZ Corp', comision:410, observacion:'', seguroAplica:'APLICA', ro:'2026-105', cierre:'14/10/2026', validez:'30/10/2026', servicio:'FCL', consignatario:'Distribuidora XYZ', ref:'DXYZ-032', agente:'BUE Coload', ruta:'BUE→CAL', etd:'20/10/2026', eta:'10/11/2026', cantidad:'1x40HC', naviera:'Hapag',
+    estado:'ABIERTA', prioridad:true, seguroPrima:180, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'Global Log', comision:260, observacion:'Pendiente confirmar seguro', seguroAplica:'', ro:'2026-106', cierre:'22/10/2026', validez:'05/11/2026', servicio:'LCL', consignatario:'Textiles Unidos', ref:'TXT-076', agente:'', ruta:'VLC→CAL', etd:'15/11/2026', eta:'20/12/2026', cantidad:'3 CBM', naviera:'ONE',
+    estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +3 días'] },
+  { broker:'ABC Brokers', comision:920, observacion:'', seguroAplica:'APLICA', ro:'2026-107', cierre:'30/10/2026', validez:'15/11/2026', servicio:'FCL', consignatario:'Agroexport S.A.', ref:'AGRO-045', agente:'Qingdao Partner', ruta:'CAL→QIN', etd:'01/12/2026', eta:'05/01/2027', cantidad:'4x40RF', naviera:'Maersk',
+    estado:'ABIERTA', prioridad:false, seguroPrima:280, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'XYZ Corp', comision:1100, observacion:'Carga proyecto', seguroAplica:'APLICA', ro:'2026-108', cierre:'04/11/2026', validez:'20/11/2026', servicio:'FCL', consignatario:'Minera del Norte', ref:'MIN-051', agente:'Busan Agent', ruta:'BUS→CAL', etd:'18/11/2026', eta:'29/12/2026', cantidad:'3x40OT', naviera:'MSC',
+    estado:'ABIERTA', prioridad:true, seguroPrima:390, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'', comision:0, observacion:'', seguroAplica:'NO APLICA', ro:'2026-109', cierre:'10/11/2026', validez:'28/11/2026', servicio:'Aéreo', consignatario:'Farma Lima SAC', ref:'FL-3302', agente:'Frankfurt Air', ruta:'FRA→LIM', etd:'02/12/2026', eta:'04/12/2026', cantidad:'150 kg', naviera:'Lufthansa Cargo',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'ABC Brokers', comision:530, observacion:'', seguroAplica:'APLICA', ro:'2026-110', cierre:'17/11/2026', validez:'27/11/2026', servicio:'FCL', consignatario:'Ferretería Central', ref:'', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'10/12/2026', eta:'15/01/2027', cantidad:'1x40HC', naviera:'COSCO',
+    estado:'ABIERTA', prioridad:false, seguroPrima:150, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'Global Log', comision:300, observacion:'', seguroAplica:'', ro:'2026-111', cierre:'21/11/2026', validez:'05/12/2026', servicio:'LCL', consignatario:'Retail Perú', ref:'RP-9921', agente:'Miami Coload', ruta:'MIA→CAL', etd:'08/12/2026', eta:'18/12/2026', cantidad:'4 CBM', naviera:'CMA CGM',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
+  { broker:'XYZ Corp', comision:0, observacion:'Comisión por negociar', seguroAplica:'APLICA', ro:'2026-112', cierre:'25/11/2026', validez:'10/12/2026', servicio:'FCL', consignatario:'Pesquera Pacífico', ref:'PP-118', agente:'Shanghai Partner', ruta:'CAL→SHA', etd:'15/12/2026', eta:'22/01/2027', cantidad:'2x40RF', naviera:'Maersk',
+    estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
 ];
 
 function loadData() {
@@ -370,42 +570,99 @@ function normDate(v) {
   const s = String(v).trim();
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (iso) return `${pad2(iso[3])}/${pad2(iso[2])}/${iso[1]}`;
-  const d = parseDate(s);
+  const d = parseDate(s.replace(/[-.]/g, '/'));
   return d ? fmtDate(d) : s;
 }
-function currentMilestone(r) {
-  let cur = 'Sin booking';
-  MILESTONES.forEach(m => { if (r.hitos && r.hitos[m]) cur = m; });
-  return cur;
-}
 const normKey = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function isBlank(v) { return v === undefined || v === null || String(v).trim() === '' || String(v).trim() === '—'; }
+function hoy() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function diasDesde(s) { const d = parseDate(s); return d ? Math.round((hoy() - d) / 864e5) : null; }
+
+// ---- Mes de cierre (para agrupar) ----
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function mesCierre(r) { const d = parseDate(r.cierre); return d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}` : ''; }
+function mesLabel(k) { if (!k) return 'Sin fecha de cierre'; const [y, m] = k.split('-'); return `${MESES[Number(m) - 1]} ${y}`; }
+
+// ---- Cobro de la comisión propia: se cobra cuando el cliente ya pagó el servicio ----
+function cobroInfo(r) {
+  const com = Number(r.comision) || 0, cob = Number(r.cobrado) || 0;
+  const saldo = Math.max(0, Math.round((com - cob) * 100) / 100);
+  const pago = parseDate(r.fechaPagoCliente);
+  let estado;
+  if (com <= 0) estado = 'SIN COMISIÓN';
+  else if (cob >= com) estado = 'COBRADA';
+  else if (cob > 0) estado = 'PARCIAL';
+  else if (pago) estado = 'LISTA PARA COBRAR';
+  else estado = 'ESPERA PAGO CLIENTE';
+  const diasDesdePago = pago && saldo > 0 ? Math.max(0, diasDesde(r.fechaPagoCliente)) : 0;   // urgencia del cobro
+  const dEta = diasDesde(r.eta);
+  const diasSinPago = !pago && com > 0 && dEta !== null && dEta > 0 ? dEta : 0;                 // carga arribó y el cliente aún no paga
+  return { com, cob, saldo, estado, pago, diasDesdePago, diasSinPago, cobrable: !!pago && saldo > 0 };
+}
+
+// ---- Etapa de la operación (solo ETD / ETA + cobro) ----
+const ETAPAS = ['Por zarpar', 'En tránsito', 'Arribada · espera pago cliente', 'Lista para cobrar comisión', 'Comisión cobrada'];
+const ETAPA_COLORS = {
+  'Por zarpar':'#4a4a4a', 'En tránsito':'#d2d2d2', 'Arribada · espera pago cliente':'#5aa0ff',
+  'Lista para cobrar comisión':'#f5c518', 'Comisión cobrada':'#00d26a'
+};
+function etapa(r) {
+  const c = cobroInfo(r);
+  if (c.estado === 'COBRADA') return 'Comisión cobrada';
+  if (c.cobrable) return 'Lista para cobrar comisión';
+  const t = hoy(), etd = parseDate(r.etd), eta = parseDate(r.eta);
+  if (etd && t < etd) return 'Por zarpar';
+  if (eta && t < eta) return 'En tránsito';
+  if (c.estado === 'SIN COMISIÓN' && c.pago) return 'Comisión cobrada';
+  return 'Arribada · espera pago cliente';
+}
+
+// ---- Calidad de datos y semáforo (calculado, no se guarda) ----
+function faltantes(r) {
+  return {
+    obligatorios: REQUIRED_KEYS.filter(k => isBlank(r[k])),
+    importantes: IMPORTANT_KEYS.filter(k => k === 'comision' ? !(Number(r.comision) > 0) : isBlank(r[k])),
+  };
+}
+// rojo: falta un dato obligatorio o la comisión lleva > 30 días lista para cobrar
+// ámbar: falta un dato importante, hay comisión lista para cobrar, o el cliente no paga > 30 días después del arribo
+function calcSem(r) {
+  const f = faltantes(r), c = cobroInfo(r);
+  if (f.obligatorios.length || (c.cobrable && c.diasDesdePago > 30)) return 'rojo';
+  if (f.importantes.length || c.cobrable || c.diasSinPago > 30) return 'ambar';
+  return 'verde';
+}
+
+// Filas de notas debajo del encabezado ("IMPORTANTE", "NUNCA VACIO"...) se ignoran al importar
+function esFilaDeNotas(raw) {
+  const vals = Object.values(raw).map(v => String(v).trim());
+  if (vals.some(v => /^(total|totales|subtotal)$/i.test(v))) return true;   // fila de totales
+  return vals.filter(v => /importa|nunca|vac[ií]o|aplica\s+no\s+aplica/i.test(v)).length >= 2;
+}
 
 function rowsFromSheet(json) {
-  return json.map(raw => {
+  return json.filter(raw => !esFilaDeNotas(raw)).map(raw => {
     const byKey = {};
     Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
-    const get = (key, header) => {
-      for (const k of [normKey(header), normKey(key.replace('hito:', '')), normKey(header.replace(/usd/i, ''))]) if (k in byKey) return byKey[k];
+    const get = (key, header, aliases) => {
+      for (const k of [header, ...aliases, key].map(normKey)) if (k in byKey) return byKey[k];
       return '';
     };
-    const r = { hitos: {}, alertas: [] };
-    EXCEL_COLUMNS.forEach(([key, header, type]) => {
-      const v = get(key, header);
+    const r = { alertas: [] };
+    EXCEL_COLUMNS.forEach(([key, header, type, , aliases]) => {
+      const v = get(key, header, aliases);
       let val;
       switch (type) {
         case 'num': val = Number(String(v).replace(/[$,\s]/g, '')) || 0; break;
         case 'date': val = normDate(v); break;
         case 'prioridad': val = /^(si|sí|alta|true|1|x)$/i.test(String(v).trim()); break;
-        case 'sem': { const s = normKey(v); val = s.startsWith('roj') ? 'rojo' : s.startsWith('amb') || s.startsWith('ama') ? 'ambar' : 'verde'; break; }
         case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
-        case 'seguroEstado': { const s = normKey(v); val = s.includes('nocontratado') || s === 'no' ? 'NO_CONTRATADO' : s.includes('contratado') ? 'CONTRATADO' : ''; break; }
+        case 'seguro': { const s = normKey(v); val = /^(noaplica|no|na|nocontratado)$/.test(s) ? 'NO APLICA' : /^(aplica|si|contratado)$/.test(s) ? 'APLICA' : ''; break; }
         case 'alertas': val = String(v || '').replace(/[<>]/g, '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
         default: val = String(v ?? '').replace(/[<>]/g, '').trim();
       }
-      if (key.startsWith('hito:')) { if (val) r.hitos[key.slice(5)] = val; }
-      else r[key] = val;
+      r[key] = val;
     });
-    if (!r.agente) r.agente = '—';
     return r;
   }).filter(r => r.ro);
 }
@@ -414,9 +671,8 @@ function rowsToSheet(data) {
   return data.map(r => {
     const o = {};
     EXCEL_COLUMNS.forEach(([key, header, type]) => {
-      let v = key.startsWith('hito:') ? (r.hitos || {})[key.slice(5)] || '' : r[key];
+      let v = r[key];
       if (type === 'prioridad') v = v ? 'Alta' : 'Normal';
-      else if (type === 'seguroEstado') v = v === 'NO_CONTRATADO' ? 'No contratado' : v === 'CONTRATADO' ? 'Contratado' : '';
       else if (type === 'alertas') v = (v || []).join('; ');
       o[header] = v ?? '';
     });
@@ -430,17 +686,79 @@ async function importExcelFile(file) {
   const name = wb.SheetNames.find(n => normKey(n) === 'oportunidades') || wb.SheetNames[0];
   const rows = rowsFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true }));
   if (!rows.length) throw new Error('No se encontraron filas con RO en la hoja "' + name + '".');
+  const cli = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes');
+  rows.clientes = cli ? clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[cli], { defval: '', raw: false })) : null;
   return rows;
+}
+async function importClientesFile(file) {
+  if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const name = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes') || wb.SheetNames[0];
+  const list = clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false }));
+  if (!list.length) throw new Error('No se encontraron filas con EMPRESA en la hoja "' + name + '".');
+  return list;
 }
 
 function downloadExcel(data, filename) {
   if (!window.XLSX) { alert('No se pudo cargar la librería de Excel (revisa tu conexión a internet).'); return; }
   const ws = XLSX.utils.json_to_sheet(rowsToSheet(data), { header: EXCEL_COLUMNS.map(c => c[1]) });
   ws['!cols'] = EXCEL_COLUMNS.map(c => ({ wch: Math.max(12, c[1].length + 2) }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length, c: EXCEL_COLUMNS.length - 1 } }) };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Oportunidades');
+  if (typeof CLIENTES !== 'undefined' && CLIENTES.length) {
+    const wc = XLSX.utils.json_to_sheet(clientesToSheet(CLIENTES), { header: CLIENT_COLUMNS.map(c => c[1]) });
+    wc['!cols'] = CLIENT_COLUMNS.map(() => ({ wch: 22 }));
+    XLSX.utils.book_append_sheet(wb, wc, 'Clientes');
+  }
   XLSX.writeFile(wb, filename);
 }
+
+// ============ BD CLIENTES ============
+const CLIENTES_KEY = 'crm_clientes_v1';
+// [clave, encabezado en Excel, obligatorio, alias]
+const CLIENT_COLUMNS = [
+  ['empresa',   'EMPRESA',   true,  ['Cliente', 'Razón social', 'Razon social']],
+  ['contacto',  'CONTACTO',  false, []],
+  ['celular',   'CELULAR',   false, ['Teléfono', 'Telefono', 'Móvil', 'Movil']],
+  ['correo',    'CORREO',    false, ['Email', 'E-mail', 'Mail']],
+  ['direccion', 'DIRECCION', false, ['Dirección']],
+  ['distrito',  'DISTRITO',  false, []],
+  ['semana',    'SEMANA',    false, []],   // también acepta encabezados como "SEMANA 35"
+];
+const SAMPLE_CLIENTES = [
+  { empresa:'ACME SAC', contacto:'Carla Ríos', celular:'987654321', correo:'compras@acme.pe', direccion:'Av. Argentina 1450', distrito:'Callao', semana:'35' },
+  { empresa:'Global Trade Perú', contacto:'Jorge Paredes', celular:'991234567', correo:'jparedes@globaltrade.pe', direccion:'Jr. Huallaga 320', distrito:'Cercado de Lima', semana:'35' },
+  { empresa:'Import del Sur', contacto:'Lucía Medina', celular:'956789012', correo:'lmedina@importsur.pe', direccion:'Av. Colonial 2100', distrito:'Lima', semana:'36' },
+  { empresa:'Comercial Andina', contacto:'Pedro Salas', celular:'944556677', correo:'psalas@andina.com.pe', direccion:'Calle Los Pinos 145', distrito:'San Isidro', semana:'36' },
+  { empresa:'Agroexport S.A.', contacto:'María Torres', celular:'933221100', correo:'mtorres@agroexport.pe', direccion:'Panamericana Sur km 32', distrito:'Lurín', semana:'37' },
+  { empresa:'Minera del Norte', contacto:'Ricardo Vega', celular:'922113344', correo:'logistica@mineranorte.pe', direccion:'Av. Javier Prado Este 4200', distrito:'Surco', semana:'37' },
+  { empresa:'Farma Lima SAC', contacto:'Ana Quispe', celular:'911002233', correo:'aquispe@farmalima.pe', direccion:'Av. La Marina 980', distrito:'San Miguel', semana:'' },
+  { empresa:'Retail Perú', contacto:'', celular:'', correo:'importaciones@retailperu.pe', direccion:'Av. Benavides 1555', distrito:'Miraflores', semana:'38' },
+];
+function loadClientes() {
+  try { const s = localStorage.getItem(CLIENTES_KEY); if (s) { const d = JSON.parse(s); if (Array.isArray(d)) return d; } } catch (e) {}
+  return JSON.parse(JSON.stringify(SAMPLE_CLIENTES));
+}
+function saveClientes() { try { localStorage.setItem(CLIENTES_KEY, JSON.stringify(CLIENTES)); } catch (e) {} }
+function clientesFromSheet(json) {
+  return json.map(raw => {
+    const byKey = {};
+    Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const c = {};
+    CLIENT_COLUMNS.forEach(([key, header, , aliases]) => {
+      let v = '';
+      for (const k of [header, ...aliases].map(normKey)) if (k in byKey) { v = byKey[k]; break; }
+      if (key === 'semana' && v === '') { const k = Object.keys(byKey).find(k => k.startsWith('semana')); if (k) v = byKey[k]; }
+      c[key] = String(v ?? '').replace(/[<>]/g, '').trim();
+    });
+    return c;
+  }).filter(c => c.empresa);
+}
+function clientesToSheet(list) {
+  return list.map(c => Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])));
+}
+const empresaKey = s => normKey(s).replace(/(sac|saa|sa|srl|eirl|sociedadanonima)$/,'');
 
 // ============ CONEXIÓN CON GOOGLE SHEETS (Apps Script) + LOGIN ============
 // Dentro de Apps Script existe google.script.run: los datos vienen de la hoja y se exige usuario/contraseña.
@@ -478,9 +796,9 @@ function showLogin(msg) {
   if (!ov) {
     document.body.insertAdjacentHTML('beforeend', `
     <div id="loginOverlay" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
-      <form id="loginForm" class="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4">
+      <form id="loginForm" class="w-full max-w-sm bg-card card rounded-xl shadow-xl p-6 space-y-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-sky-500 flex items-center justify-center text-xl">🚢</div>
+          <div class="w-9 h-9 rounded-lg btn-primary flex items-center justify-center text-[11px] font-bold tracking-tight">CRM</div>
           <div><h1 class="text-lg font-semibold text-slate-800 leading-tight">Control de Oportunidades</h1>
           <p class="text-xs text-slate-500">CRM · Agente de Carga Internacional</p></div>
         </div>
@@ -491,7 +809,7 @@ function showLogin(msg) {
           <div class="relative"><input id="loginPass" type="password" autocomplete="current-password" required class="w-full border border-slate-200 rounded-lg px-3 py-2 pr-16 text-sm focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500">
           <button type="button" onclick="const i=document.getElementById('loginPass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Ver':'Ocultar'" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-800">Ver</button></div></div>
         <p id="loginError" class="hidden text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2"></p>
-        <button id="loginBtn" type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-2 text-sm font-medium">Ingresar</button>
+        <button id="loginBtn" type="submit" class="w-full btn-primary rounded-full px-3 py-2 text-sm font-medium">Ingresar</button>
         <p class="text-[11px] text-slate-400 text-center">Acceso restringido. Si no tienes usuario, pídelo al administrador.</p>
       </form>
     </div>`);
@@ -521,11 +839,12 @@ function showLogin(msg) {
 }
 
 async function loadAllData() {
-  if (!IS_GAS) return loadData();
+  if (!IS_GAS) { CLIENTES = loadClientes(); return loadData(); }
   if (!getToken()) await showLogin();
   const res = await api('getData');
   SESSION = res.user;
   APP = { appUrl: res.appUrl, sheetUrl: res.sheetUrl, config: res.config || {} };
+  CLIENTES = clientesFromSheet(res.clientes || []);
   return rowsFromSheet(res.rows);
 }
 
@@ -587,175 +906,390 @@ function applySessionUI() {
 }
 
 let DATA = [];
+let CLIENTES = [];
 
 // ============ HELPERS ============
-const fmt$ = n => '$' + n.toLocaleString('en-US');
+const fmt$ = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const semClasses = { verde:'bg-emerald-500', ambar:'bg-amber-500', rojo:'bg-red-500' };
-const semText    = { verde:'text-emerald-600', ambar:'text-amber-600', rojo:'text-red-600' };
-const semBadge   = { verde:'bg-emerald-50 text-emerald-700', ambar:'bg-amber-50 text-amber-700', rojo:'bg-red-50 text-red-700' };
-
-// ============ RENDER TABLA ============
-function renderTable(rows) {
-  const tb = document.getElementById('tbody');
-  tb.innerHTML = rows.map(r => `
-    <tr class="row-hover" onclick="openModal('${r.ro}')">
-      <td class="px-4 py-3 font-medium text-slate-700">${r.ro}</td>
-      <td class="px-4 py-3">${r.consignatario}</td>
-      <td class="px-4 py-3 text-slate-600">${r.ruta}</td>
-      <td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">${r.servicio}</span></td>
-      <td class="px-4 py-3 text-slate-600">${r.naviera}</td>
-      <td class="px-4 py-3 text-slate-600">${r.etd}</td>
-      <td class="px-4 py-3 text-slate-600">${r.eta}</td>
-      <td class="px-4 py-3 text-center">
-        <label class="inline-flex items-center gap-1.5 cursor-pointer" onclick="event.stopPropagation()">
-          <input type="checkbox" ${r.prioridad ? 'checked' : ''} ${IS_GAS && SESSION && SESSION.rol === 'lector' ? 'disabled' : ''} onchange="togglePriority('${r.ro}', this.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
-          <span class="text-xs ${r.prioridad ? 'font-semibold text-red-600' : 'text-slate-400'}">${r.prioridad ? 'Alta' : 'Normal'}</span>
-        </label>
-      </td>
-      <td class="px-4 py-3 text-center"><span class="inline-block w-3 h-3 rounded-full ${semClasses[r.sem]}"></span></td>
-      <td class="px-4 py-3 text-right font-medium text-slate-700">${fmt$(r.pendiente)}</td>
-    </tr>`).join('');
-  document.getElementById('footerCount').textContent = `Mostrando ${rows.length} oportunidad(es)`;
-  renderSemaforo(rows);
-  updateKPIs(rows);
-}
-
-// ============ SEMÁFORO GLOBAL ============
-function renderSemaforo(rows) {
-  const c = { verde:0, ambar:0, rojo:0 };
-  rows.forEach(r => c[r.sem]++);
-  document.getElementById('cntVerde').textContent = c.verde;
-  document.getElementById('cntAmbar').textContent = c.ambar;
-  document.getElementById('cntRojo').textContent = c.rojo;
-}
-
-// ============ KPIs ============
-function updateKPIs(rows) {
-  const pend = rows.reduce((s,r)=>s+r.pendiente,0);
-  const com  = rows.reduce((s,r)=>s+r.comision,0);
-  const aseg = rows.filter(r=>r.seguro>0).length;
-  const venc = rows.filter(r=>r.sem==='rojo').length;
-  const abiertas = rows.filter(r=>r.estado==='ABIERTA').length;
-  document.getElementById('kpiPendiente').textContent = fmt$(pend);
-  document.getElementById('kpiAsegurado').textContent = rows.length ? Math.round(aseg/rows.length*100)+'%' : '0%';
-  document.getElementById('kpiVencidas').textContent = venc;
-  document.getElementById('kpiComision').textContent = fmt$(com);
-  document.getElementById('kpiAbiertas').textContent = abiertas;
-}
-
-// ============ FILTROS ============
-function fillSelects() {
-  const uniq = k => [...new Set(DATA.map(d=>d[k]))].sort();
-  const add = (id, arr) => { const s=document.getElementById(id); s.length = 1; arr.forEach(v=>s.insertAdjacentHTML('beforeend',`<option>${v}</option>`)); };
-  add('fRuta', uniq('ruta')); add('fNaviera', uniq('naviera')); add('fBroker', uniq('broker')); add('fServicio', uniq('servicio'));
-}
-
-function applyFilters() {
-  const q = document.getElementById('fSearch').value.trim().toLowerCase();
-  const ruta = document.getElementById('fRuta').value;
-  const nav  = document.getElementById('fNaviera').value;
-  const bro  = document.getElementById('fBroker').value;
-  const serv = document.getElementById('fServicio').value;
-  const est  = document.getElementById('fEstado').value;
-
-  const rows = DATA.filter(r =>
-    (!q || r.ro.toLowerCase().includes(q) || (r.ref||'').toLowerCase().includes(q)) &&
-    (!ruta || r.ruta===ruta) && (!nav || r.naviera===nav) &&
-    (!bro || r.broker===bro) && (!serv || r.servicio===serv) && (!est || r.estado===est)
-  );
-  renderTable(rows);
-  renderCharts(rows);
-  renderEtaAlerts(rows);
-  renderUninsured(rows);
-}
-
-function resetFilters() {
-  ['fSearch','fRuta','fNaviera','fBroker','fServicio','fEstado'].forEach(id=>document.getElementById(id).value='');
-  applyFilters();
-}
-
-// ============ MODAL ============
-function openModal(ro) {
-  const r = DATA.find(d=>d.ro===ro); if(!r) return;
-  currentModalRO = ro;
-  document.getElementById('mTitle').textContent = `RO ${r.ro} — ${r.consignatario}`;
-  document.getElementById('mSub').textContent = `${r.ruta} · ${r.servicio} · ${r.naviera}`;
-  const est = document.getElementById('mEstado');
-  est.textContent = r.estado;
-  est.className = 'text-xs font-semibold rounded-full px-3 py-1 ' + (ESTADO_BADGE[r.estado] || 'bg-slate-100 text-slate-700');
-
-  document.getElementById('mComercial').innerHTML = dl([
-    ['Broker', r.broker], ['Comisión', fmt$(r.comision)],
-    ['Cierre', r.cierre], ['Validez', r.validez], ['Estado', r.estado]
-  ]);
-  document.getElementById('mFinanciero').innerHTML = dl([
-    ['Pendiente', fmt$(r.pendiente)], ['Seguro (prima)', r.seguro? fmt$(r.seguro):'—']
-  ]);
-  document.getElementById('mOperativo').innerHTML = dl([
-    ['Servicio', r.servicio], ['Ruta', r.ruta], ['Naviera', r.naviera],
-    ['ETD', r.etd], ['ETA', r.eta], ['Agente/Coload', r.agente], ['Ref cliente', r.ref]
-  ]);
-
-  const actual = currentMilestone(r);
-  const hitoEl = document.getElementById('mHitoActual');
-  hitoEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${MILESTONE_COLORS[actual]}"></span>Estado actual: ${actual}`;
-  document.getElementById('mTimeline').innerHTML = MILESTONES.map(m => {
-    const date = (r.hitos || {})[m] || '';
-    const done = !!date;
-    return `
-    <li class="flex items-center gap-2 ${done?'text-slate-700':'text-slate-400'} ${m===actual?'font-semibold':''}">
-      <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] text-white" style="background:${done ? MILESTONE_COLORS[m] : '#e2e8f0'}">${done?'✔':''}</span>
-      <span class="flex-1">${m}</span>
-      <span class="text-xs">${date}</span>
-    </li>`;
-  }).join('');
-
-  document.getElementById('mAlertas').innerHTML = r.alertas.length
-    ? r.alertas.map(a=>`<li class="text-red-600">• ${a}</li>`).join('')
-    : `<li class="text-emerald-600">Sin alertas — todo en orden ✔</li>`;
-
-  document.getElementById('modal').classList.remove('hidden');
-  document.body.classList.add('modal-open');
-}
-let currentModalRO = null;
-function editFromModal() { const ro = currentModalRO; closeModal(); openROForm(ro); }
+const COBRO_BADGE = {
+  'COBRADA':'bg-emerald-100 text-emerald-700', 'PARCIAL':'bg-amber-100 text-amber-800', 'LISTA PARA COBRAR':'bg-amber-100 text-amber-800',
+  'ESPERA PAGO CLIENTE':'bg-violet-100 text-violet-700', 'SIN COMISIÓN':'bg-slate-100 text-slate-500'
+};
+const SEGURO_BADGE = { 'APLICA':'bg-sky-100 text-sky-700', 'NO APLICA':'bg-slate-100 text-slate-600' };
 const ESTADO_BADGE = {
   ABIERTA:'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300',
   CERRADA:'bg-red-100 text-red-700 ring-1 ring-red-300',
   GANADA:'bg-sky-100 text-sky-700 ring-1 ring-sky-300',
   PERDIDA:'bg-slate-200 text-slate-700 ring-1 ring-slate-300'
 };
-function dl(items){ return items.map(([k,v])=>`<div class="flex justify-between gap-2"><dt class="text-slate-500">${k}</dt><dd class="font-medium text-slate-700 text-right">${v}</dd></div>`).join(''); }
-function closeModal(){ document.getElementById('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
-
-// ============ CHARTS (CSS) ============
-function renderCharts(rows) {
-  // Top rutas por pendiente
-  const byRuta = {};
-  rows.forEach(r => byRuta[r.ruta] = (byRuta[r.ruta]||0) + r.pendiente);
-  const rutas = Object.entries(byRuta).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const maxR = Math.max(1, ...rutas.map(x=>x[1]));
-  document.getElementById('chartRutas').innerHTML = rutas.map(([k,v])=>`
-    <div>
-      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${k}</span><span class="font-medium">${fmt$(v)}</span></div>
-      <div class="h-2 bg-slate-100 rounded"><div class="bar h-2 bg-sky-500 rounded" style="width:${(v/maxR*100).toFixed(0)}%"></div></div>
-    </div>`).join('') || '<p class="text-xs text-slate-400">Sin datos</p>';
-
-  // Comisión por broker
-  const byBro = {};
-  rows.forEach(r => byBro[r.broker] = (byBro[r.broker]||0) + r.comision);
-  const bros = Object.entries(byBro).sort((a,b)=>b[1]-a[1]);
-  const maxB = Math.max(1, ...bros.map(x=>x[1]));
-  document.getElementById('chartBrokers').innerHTML = bros.map(([k,v])=>`
-    <div>
-      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${k}</span><span class="font-medium">${fmt$(v)}</span></div>
-      <div class="h-2 bg-slate-100 rounded"><div class="bar h-2 bg-indigo-500 rounded" style="width:${(v/maxB*100).toFixed(0)}%"></div></div>
-    </div>`).join('') || '<p class="text-xs text-slate-400">Sin datos</p>';
+const canEdit = () => !(IS_GAS && SESSION && SESSION.rol === 'lector');
+const sum = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+function groupBy(arr, f) { const m = new Map(); arr.forEach(x => { const k = f(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); }); return m; }
+const VACIO = '(vacío)';
+function cellVal(r, key) {
+  const v = r[key];
+  if (REQUIRED_KEYS.includes(key) && isBlank(v)) return '<span class="text-[11px] rounded bg-red-50 text-red-600 px-1.5 py-0.5 font-medium">Falta</span>';
+  if (IMPORTANT_KEYS.includes(key) && (key === 'comision' ? !(Number(v) > 0) : isBlank(v))) return '<span class="text-[11px] rounded bg-amber-50 text-amber-700 px-1.5 py-0.5">Sin dato</span>';
+  return esc(v);
 }
 
-// ============ PRIORIDAD Y CONTROL DE SEGUROS ============
-let selectedInsuranceRO = null;
+// ============ COLUMNAS Y FILTROS EN EL ENCABEZADO ============
+const TABLE_COLS = [
+  { key:'ro',            label:'RO',            filter:'text' },
+  { key:'cierre',        label:'Cierre',        filter:'select', value: r => mesCierre(r), optLabel: k => mesLabel(k) },
+  { key:'consignatario', label:'Consignatario', filter:'text' },
+  { key:'ref',           label:'Ref cliente/prov.', filter:'text' },
+  { key:'ruta',          label:'Ruta',          filter:'text' },
+  { key:'servicio',      label:'Servicio',      filter:'select' },
+  { key:'agente',        label:'Agente/Coload', filter:'text' },
+  { key:'naviera',       label:'Naviera',       filter:'text' },
+  { key:'etd',           label:'ETD',           filter:'text', ph:'dd/mm' },
+  { key:'eta',           label:'ETA',           filter:'text', ph:'dd/mm' },
+  { key:'broker',        label:'Broker',        filter:'select' },
+  { key:'comision',      label:'Comisión',      filter:'select', align:'right', value: r => Number(r.comision) > 0 ? 'Con comisión' : 'Sin comisión' },
+  { key:'cobro',         label:'Cobro',         filter:'select', value: r => cobroInfo(r).estado },
+  { key:'seguroAplica',  label:'Seguro',        filter:'select' },
+  { key:'prioridad',     label:'Prioridad',     filter:'select', align:'center', value: r => r.prioridad ? 'Alta' : 'Normal' },
+  { key:'sem',           label:'🚦',            filter:'select', align:'center', value: r => calcSem(r), optLabel: k => ({ verde:'Verde', ambar:'Ámbar', rojo:'Rojo' }[k] || k) },
+];
+const colValue = (c, r) => c.value ? c.value(r) : (isBlank(r[c.key]) ? VACIO : String(r[c.key]));
+const FILTERS = {};
 
+function buildHeader() {
+  const th = (c, inner, cls = '') => `<th class="px-3 py-2 font-medium bg-slate-50 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'} ${cls}">${inner}</th>`;
+  document.getElementById('theadMain').innerHTML =
+    `<tr>${TABLE_COLS.map(c => th(c, c.label, 'pt-3 pb-1 whitespace-nowrap')).join('')}</tr>
+     <tr>${TABLE_COLS.map(c => th(c, c.filter === 'select'
+        ? `<select class="th-filter" data-key="${c.key}"><option value="">Todos</option></select>`
+        : `<input class="th-filter" data-key="${c.key}" type="search" placeholder="${c.ph || 'Filtrar…'}">`, 'pt-0 pb-2 border-b border-slate-200')).join('')}</tr>`;
+  document.getElementById('theadMain').addEventListener('input', e => {
+    const k = e.target.dataset && e.target.dataset.key;
+    if (!k) return;
+    FILTERS[k] = e.target.value;
+    e.target.classList.toggle('active', !!e.target.value);
+    applyFilters();
+  });
+}
+
+function refreshFilterOptions() {
+  TABLE_COLS.filter(c => c.filter === 'select').forEach(c => {
+    const sel = document.querySelector(`.th-filter[data-key="${c.key}"]`);
+    const cur = sel.value;
+    let vals = [...new Set(DATA.map(r => colValue(c, r)))];
+    vals.sort((a, b) => c.key === 'cierre' ? String(b).localeCompare(String(a)) : String(a).localeCompare(String(b)));
+    sel.innerHTML = '<option value="">Todos</option>' + vals.map(v => `<option value="${esc(v)}">${esc(c.optLabel ? c.optLabel(v) : v)}</option>`).join('');
+    sel.value = vals.includes(cur) ? cur : '';
+    if (!sel.value) FILTERS[c.key] = '';
+    sel.classList.toggle('active', !!sel.value);
+  });
+}
+
+function filteredRows() {
+  return DATA.filter(r => TABLE_COLS.every(c => {
+    const f = FILTERS[c.key];
+    if (!f) return true;
+    const v = colValue(c, r);
+    return c.filter === 'select' ? v === f : String(v === VACIO ? '' : v).toLowerCase().includes(f.trim().toLowerCase());
+  }));
+}
+
+function clearFilters() {
+  document.querySelectorAll('.th-filter').forEach(el => { el.value = ''; el.classList.remove('active'); });
+  Object.keys(FILTERS).forEach(k => FILTERS[k] = '');
+  applyFilters();
+}
+function setMes(k) {
+  const sel = document.querySelector('.th-filter[data-key="cierre"]');
+  sel.value = sel.value === k ? '' : k;
+  FILTERS.cierre = sel.value;
+  sel.classList.toggle('active', !!sel.value);
+  applyFilters();
+}
+
+function applyFilters() {
+  const rows = filteredRows();
+  renderTable(rows);
+  renderKPIs(rows);
+  renderMonthly(rows);
+  renderCharts(rows);
+  renderCobros(rows);
+  renderEtaAlerts(rows);
+  renderUninsured(rows);
+  renderFaltantes(rows);
+}
+const fillSelects = refreshFilterOptions;
+
+// ============ TABLA ============
+function rowHtml(r) {
+  const c = cobroInfo(r), sem = calcSem(r);
+  const cobroCell = `<span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${COBRO_BADGE[c.estado]}">${c.estado === 'LISTA PARA COBRAR' ? `Lista · ${c.diasDesdePago} d` : c.estado === 'PARCIAL' ? `Parcial · saldo ${fmt$(c.saldo)}` : c.estado === 'ESPERA PAGO CLIENTE' && c.diasSinPago ? `Espera pago · ${c.diasSinPago} d` : c.estado.charAt(0) + c.estado.slice(1).toLowerCase()}</span>`;
+  const seg = r.seguroAplica ? `<span class="text-[11px] rounded px-1.5 py-0.5 ${SEGURO_BADGE[r.seguroAplica]}">${r.seguroAplica}</span>` : cellVal(r, 'seguroAplica');
+  return `<tr class="row-hover" data-ro="${esc(r.ro)}" onclick="openModal(this.dataset.ro)">
+    <td class="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">${cellVal(r, 'ro')}</td>
+    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'cierre')}</td>
+    <td class="px-3 py-2">${cellVal(r, 'consignatario')}</td>
+    <td class="px-3 py-2 text-slate-600">${cellVal(r, 'ref')}</td>
+    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'ruta')}</td>
+    <td class="px-3 py-2">${isBlank(r.servicio) ? cellVal(r, 'servicio') : `<span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">${esc(r.servicio)}</span>`}</td>
+    <td class="px-3 py-2 text-slate-600">${cellVal(r, 'agente')}</td>
+    <td class="px-3 py-2 text-slate-600">${esc(r.naviera)}</td>
+    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'etd')}</td>
+    <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'eta')}</td>
+    <td class="px-3 py-2 text-slate-600">${cellVal(r, 'broker')}</td>
+    <td class="px-3 py-2 text-right font-medium text-slate-700 whitespace-nowrap">${Number(r.comision) > 0 ? fmt$(r.comision) : cellVal(r, 'comision')}</td>
+    <td class="px-3 py-2">${cobroCell}</td>
+    <td class="px-3 py-2">${seg}</td>
+    <td class="px-3 py-2 text-center">
+      <label class="inline-flex items-center gap-1.5 cursor-pointer" onclick="event.stopPropagation()">
+        <input type="checkbox" ${r.prioridad ? 'checked' : ''} ${canEdit() ? '' : 'disabled'} data-ro="${esc(r.ro)}" onchange="togglePriority(this.dataset.ro, this.checked)" class="rounded border-slate-300 text-sky-600">
+        <span class="text-xs ${r.prioridad ? 'font-semibold text-red-600' : 'text-slate-400'}">${r.prioridad ? 'Alta' : 'Normal'}</span>
+      </label>
+    </td>
+    <td class="px-3 py-2 text-center"><span class="inline-block w-3 h-3 rounded-full ${semClasses[sem]}"></span></td>
+  </tr>`;
+}
+
+function renderTable(rows) {
+  const group = document.getElementById('chkAgrupar').checked;
+  const sorted = [...rows].sort((a, b) => (parseDate(b.cierre) || 0) - (parseDate(a.cierre) || 0) || String(b.ro).localeCompare(String(a.ro)));
+  const ncols = TABLE_COLS.length;
+  let html = '';
+  if (group) {
+    groupBy(sorted, mesCierre).forEach((list, k) => {
+      const cs = list.map(cobroInfo);
+      html += `<tr class="bg-sky-50/70 cursor-pointer" data-mes="${k}" onclick="setMes(this.dataset.mes)">
+        <td colspan="${ncols}" class="px-3 py-2 text-xs font-semibold text-slate-700">
+          ${mesLabel(k)} <span class="font-normal text-slate-500">· ${list.length} RO · Comisión ${fmt$(sum(list, r => r.comision))} · Cobrada ${fmt$(sum(cs, c => c.cob))} · Lista p/ cobrar ${fmt$(sum(cs.filter(c => c.cobrable), c => c.saldo))}</span>
+        </td></tr>` + list.map(rowHtml).join('');
+    });
+  } else {
+    html = sorted.map(rowHtml).join('');
+  }
+  document.getElementById('tbody').innerHTML = html || `<tr><td colspan="${ncols}" class="px-4 py-4 text-center text-sm text-slate-400">No hay operaciones con estos filtros.</td></tr>`;
+  const cs = rows.map(cobroInfo);
+  document.getElementById('tfootMain').innerHTML = rows.length ? `<tr>
+    <td class="px-3 py-2" colspan="11">Total (${rows.length} RO)</td>
+    <td class="px-3 py-2 text-right whitespace-nowrap">${fmt$(sum(rows, r => r.comision))}</td>
+    <td class="px-3 py-2 text-xs font-normal text-slate-600 whitespace-nowrap" colspan="${ncols - 12}">Cobrada ${fmt$(sum(cs, c => c.cob))} · Por cobrar ${fmt$(sum(cs, c => c.saldo))}</td>
+  </tr>` : '';
+  document.getElementById('footerCount').textContent = `Mostrando ${rows.length} de ${DATA.length} oportunidad(es)`;
+  const c = { verde:0, ambar:0, rojo:0 };
+  rows.forEach(r => c[calcSem(r)]++);
+  document.getElementById('cntVerde').textContent = c.verde;
+  document.getElementById('cntAmbar').textContent = c.ambar;
+  document.getElementById('cntRojo').textContent = c.rojo;
+}
+
+// ============ TOTALIZADORES ============
+function renderKPIs(rows) {
+  const cs = rows.map(cobroInfo);
+  const com = sum(cs, c => c.com), cob = sum(cs, c => c.cob);
+  const lista = cs.filter(c => c.cobrable), espera = cs.filter(c => c.estado === 'ESPERA PAGO CLIENTE');
+  const set = (id, v) => document.getElementById(id).textContent = v;
+  set('kRO', rows.length);
+  set('kROsub', `${rows.filter(r => r.estado === 'ABIERTA').length} abiertas · ${rows.filter(r => faltantes(r).obligatorios.length).length} con datos obligatorios faltantes`);
+  set('kCom', fmt$(com));
+  set('kComSub', `${rows.filter(r => !(Number(r.comision) > 0)).length} RO sin comisión registrada`);
+  set('kCob', fmt$(cob));
+  set('kCobSub', com ? `${Math.round(cob / com * 100)}% del total` : '—');
+  set('kLista', fmt$(sum(lista, c => c.saldo)));
+  set('kListaSub', `${lista.length} RO · ${lista.filter(c => c.diasDesdePago > 30).length} con más de 30 días`);
+  set('kEspera', fmt$(sum(espera, c => c.saldo)));
+  set('kEsperaSub', `${espera.length} RO · ${espera.filter(c => c.diasSinPago > 0).length} ya arribadas`);
+  const ap = rows.filter(r => r.seguroAplica === 'APLICA').length, na = rows.filter(r => r.seguroAplica === 'NO APLICA').length, sd = rows.length - ap - na;
+  set('kSeg', rows.length ? Math.round(ap / rows.length * 100) + '%' : '0%');
+  set('kSegSub', `${ap} aplica · ${na} no aplica · ${sd} sin definir`);
+}
+
+// ============ RESUMEN POR MES DE CIERRE ============
+function renderMonthly(rows) {
+  const sorted = [...rows].sort((a, b) => mesCierre(b).localeCompare(mesCierre(a)));
+  const line = (label, list, attrs = '', cls = '') => {
+    const cs = list.map(cobroInfo);
+    const com = sum(cs, c => c.com), cob = sum(cs, c => c.cob), pct = com ? Math.round(cob / com * 100) : 0;
+    return `<tr ${attrs} class="${cls}">
+      <td class="px-4 py-2.5 font-medium text-slate-700">${label}</td>
+      <td class="px-4 py-2.5 text-right">${list.length}</td>
+      <td class="px-4 py-2.5 text-right">${fmt$(com)}</td>
+      <td class="px-4 py-2.5 text-right text-emerald-700">${fmt$(cob)}</td>
+      <td class="px-4 py-2.5 text-right text-amber-700">${fmt$(sum(cs.filter(c => c.cobrable), c => c.saldo))}</td>
+      <td class="px-4 py-2.5 text-right text-violet-700">${fmt$(sum(cs.filter(c => c.estado === 'ESPERA PAGO CLIENTE'), c => c.saldo))}</td>
+      <td class="px-4 py-2.5"><div class="flex items-center gap-2"><div class="h-2 flex-1 bg-slate-100 rounded"><div class="bar h-2 bg-emerald-500 rounded" style="width:${pct}%"></div></div><span class="text-xs w-9 text-right">${pct}%</span></div></td>
+      <td class="px-4 py-2.5 text-right">${list.filter(r => !r.seguroAplica).length}</td>
+      <td class="px-4 py-2.5 text-right">${list.filter(r => faltantes(r).obligatorios.length + faltantes(r).importantes.length).length}</td>
+    </tr>`;
+  };
+  const sel = FILTERS.cierre;
+  document.getElementById('tbodyMes').innerHTML = [...groupBy(sorted, mesCierre)].map(([k, list]) =>
+    line(mesLabel(k), list, `data-mes="${k}" onclick="setMes(this.dataset.mes)"`, 'row-hover' + (sel === k ? ' bg-sky-50' : ''))).join('')
+    || '<tr><td colspan="9" class="px-4 py-4 text-center text-xs text-slate-400">Sin datos</td></tr>';
+  document.getElementById('tfootMes').innerHTML = rows.length ? line('Total', rows) : '';
+}
+
+// ============ PANELES IZQUIERDOS ============
+function renderCobros(rows) {
+  const lista = rows.map(r => ({ r, c: cobroInfo(r) })).filter(x => x.c.cobrable).sort((a, b) => b.c.diasDesdePago - a.c.diasDesdePago);
+  document.getElementById('cobroCount').textContent = `${lista.length} · ${fmt$(sum(lista, x => x.c.saldo))}`;
+  const btn = r => canEdit() ? `<button type="button" data-ro="${esc(r.ro)}" onclick="openCobro(this.dataset.ro)" class="shrink-0 text-xs bg-amber-400 hover:bg-amber-300 text-slate-900 font-medium rounded-full px-2.5 py-1.5">Registrar cobro</button>` : '';
+  document.getElementById('listCobrar').innerHTML = lista.map(({ r, c }) => `
+    <li class="rounded-md border px-3 py-2 ${c.diasDesdePago > 30 ? 'border-red-200 bg-red-50/50' : 'border-amber-100 bg-amber-50/40'}">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <button type="button" data-ro="${esc(r.ro)}" onclick="openModal(this.dataset.ro)" class="text-sky-700 hover:underline font-semibold">RO ${esc(r.ro)}</button>
+          <span class="ml-1 text-sm font-semibold text-slate-800">${fmt$(c.saldo)}</span>
+          <div class="text-xs text-slate-500 truncate">${esc(r.consignatario)} · ${esc(r.broker || 'sin broker')}</div>
+          <span class="inline-block mt-1 text-[11px] rounded px-1.5 py-0.5 ${c.diasDesdePago > 30 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}">Cliente pagó ${esc(r.fechaPagoCliente)} · ${c.diasDesdePago} d</span>
+        </div>
+        ${btn(r)}
+      </div>
+    </li>`).join('') || '<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">No hay comisiones listas para cobrar.</li>';
+
+  const espera = rows.map(r => ({ r, c: cobroInfo(r) })).filter(x => x.c.diasSinPago > 0).sort((a, b) => b.c.diasSinPago - a.c.diasSinPago);
+  document.getElementById('esperaCount').textContent = espera.length;
+  document.getElementById('listEspera').innerHTML = espera.map(({ r, c }) => `
+    <li class="rounded-md border border-violet-100 bg-violet-50/40 px-3 py-2 flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <span class="font-semibold text-slate-700">RO ${esc(r.ro)}</span> <span class="text-xs text-slate-600">${fmt$(c.saldo)}</span>
+        <div class="text-xs text-slate-500 truncate">${esc(r.consignatario)} · arribó ${esc(r.eta)} (${c.diasSinPago} d)</div>
+      </div>
+      ${canEdit() ? `<button type="button" data-ro="${esc(r.ro)}" onclick="openCobro(this.dataset.ro)" class="shrink-0 text-xs border border-violet-300 text-violet-700 hover:bg-violet-50 rounded-full px-2 py-1">Cliente pagó</button>` : ''}
+    </li>`).join('') || '<li class="text-xs text-slate-400">Ninguna.</li>';
+}
+
+function renderEtaAlerts(rows) {
+  const alerts = [];
+  rows.forEach(r => (r.alertas || []).filter(a => /eta/i.test(a)).forEach(a => alerts.push({ r, texto: a })));
+  document.getElementById('etaAlertCount').textContent = `${alerts.length} alertas`;
+  document.getElementById('etaAlertsList').innerHTML = alerts.map(({ r, texto }) => `
+    <li class="rounded-md bg-red-50/70 border border-red-100 px-3 py-2">
+      <div class="flex flex-wrap justify-between gap-1">
+        <span class="font-semibold text-slate-700">RO ${esc(r.ro)}</span>
+        <span class="text-xs text-slate-500">${esc(r.ruta)} · ETA ${esc(r.eta)}</span>
+      </div>
+      <div class="text-xs text-slate-500">${esc(r.consignatario)}</div>
+      <div class="text-xs text-red-700 mt-1">• ${esc(texto)}</div>
+    </li>`).join('') || '<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3">No hay alertas ETA activas.</li>';
+}
+
+function renderUninsured(rows) {
+  const sinDef = rows.filter(r => !r.seguroAplica);
+  document.getElementById('uninsuredCount').textContent = `${sinDef.length} sin definir`;
+  document.getElementById('listUninsured').innerHTML = sinDef.map(r => `
+    <li class="rounded-md border px-3 py-2 ${r.ro === selectedInsuranceRO ? 'border-sky-300 bg-sky-50/60' : 'border-amber-100 bg-amber-50/40'}">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <span class="font-semibold text-slate-700">RO ${esc(r.ro)}</span>
+          <div class="text-xs text-slate-500 truncate">${esc(r.consignatario)} · ${esc(r.ruta)}</div>
+        </div>
+        ${canEdit() ? `<button type="button" data-ro="${esc(r.ro)}" onclick="openInsuranceCalculator(this.dataset.ro)" class="shrink-0 text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-full px-3 py-1.5">Definir</button>` : ''}
+      </div>
+    </li>`).join('') || '<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">Todas las operaciones tienen SEGURO. definido.</li>';
+}
+
+function renderFaltantes(rows) {
+  const list = rows.map(r => ({ r, f: faltantes(r) })).filter(x => x.f.obligatorios.length || x.f.importantes.length)
+    .sort((a, b) => b.f.obligatorios.length - a.f.obligatorios.length || b.f.importantes.length - a.f.importantes.length);
+  document.getElementById('faltaCount').textContent = `${list.length} RO`;
+  document.getElementById('listFaltantes').innerHTML = list.map(({ r, f }) => `
+    <li class="rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50 cursor-pointer" data-ro="${esc(r.ro)}" onclick="${canEdit() ? 'openROForm(this.dataset.ro)' : 'openModal(this.dataset.ro)'}">
+      <div class="flex justify-between gap-2"><span class="font-semibold text-slate-700">RO ${esc(r.ro || '—')}</span><span class="text-xs text-slate-500 truncate">${esc(r.consignatario)}</span></div>
+      <div class="flex flex-wrap gap-1 mt-1">
+        ${f.obligatorios.map(k => `<span class="text-[11px] rounded bg-red-100 text-red-700 px-1.5 py-0.5">${LABELS[k]}</span>`).join('')}
+        ${f.importantes.map(k => `<span class="text-[11px] rounded bg-amber-100 text-amber-800 px-1.5 py-0.5">${LABELS[k]}</span>`).join('')}
+      </div>
+    </li>`).join('') || '<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">Todos los datos obligatorios e importantes están completos.</li>';
+}
+
+// ============ GRÁFICOS (CSS) ============
+function renderCharts(rows) {
+  const byBro = groupBy(rows, r => r.broker || '(sin broker)');
+  const bros = [...byBro].map(([k, list]) => {
+    const cs = list.map(cobroInfo);
+    return { k, cob: sum(cs, c => c.cob), lista: sum(cs.filter(c => c.cobrable), c => c.saldo), espera: sum(cs.filter(c => !c.cobrable), c => c.saldo) };
+  }).map(b => ({ ...b, tot: b.cob + b.lista + b.espera })).sort((a, b) => b.tot - a.tot);
+  const maxB = Math.max(1, ...bros.map(b => b.tot));
+  document.getElementById('chartBrokers').innerHTML = bros.map(b => `
+    <div>
+      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${esc(b.k)}</span><span class="font-medium">${fmt$(b.tot)}</span></div>
+      <div class="h-2 bg-slate-100 rounded flex overflow-hidden" style="width:${(b.tot / maxB * 100).toFixed(0)}%">
+        <div class="bg-emerald-500" style="width:${b.tot ? b.cob / b.tot * 100 : 0}%"></div>
+        <div class="bg-amber-400" style="width:${b.tot ? b.lista / b.tot * 100 : 0}%"></div>
+        <div class="bg-violet-400" style="width:${b.tot ? b.espera / b.tot * 100 : 0}%"></div>
+      </div>
+    </div>`).join('') || '<p class="text-xs text-slate-400">Sin datos</p>';
+
+  const lista = rows.map(cobroInfo).filter(c => c.cobrable);
+  const buckets = [['0–15 días', c => c.diasDesdePago <= 15, 'bg-amber-300'], ['16–30 días', c => c.diasDesdePago > 15 && c.diasDesdePago <= 30, 'bg-amber-500'], ['Más de 30 días', c => c.diasDesdePago > 30, 'bg-red-500']]
+    .map(([label, f, color]) => { const l = lista.filter(f); return { label, color, n: l.length, v: sum(l, c => c.saldo) }; });
+  const maxA = Math.max(1, ...buckets.map(b => b.v));
+  document.getElementById('chartAging').innerHTML = lista.length ? buckets.map(b => `
+    <div>
+      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${b.label} <span class="text-slate-400">(${b.n} RO)</span></span><span class="font-medium">${fmt$(b.v)}</span></div>
+      <div class="h-2 bg-slate-100 rounded"><div class="bar h-2 ${b.color} rounded" style="width:${(b.v / maxA * 100).toFixed(0)}%"></div></div>
+    </div>`).join('') : '<p class="text-xs text-emerald-700">No hay comisiones pendientes de cobro con cliente pagado.</p>';
+
+  const campos = [...REQUIRED_KEYS.map(k => [k, 'bg-red-500']), ...IMPORTANT_KEYS.map(k => [k, 'bg-amber-400'])]
+    .map(([k, color]) => ({ k, color, n: rows.filter(r => faltantes(r).obligatorios.concat(faltantes(r).importantes).includes(k)).length }))
+    .filter(x => x.n).sort((a, b) => b.n - a.n);
+  document.getElementById('chartCalidad').innerHTML = campos.map(x => `
+    <div>
+      <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${LABELS[x.k]}</span><span class="font-medium">${x.n} RO</span></div>
+      <div class="h-2 bg-slate-100 rounded"><div class="bar h-2 ${x.color} rounded" style="width:${(x.n / Math.max(1, rows.length) * 100).toFixed(0)}%"></div></div>
+    </div>`).join('') || '<p class="text-xs text-emerald-700">Todo completo ✔</p>';
+}
+
+// ============ MODAL DETALLE ============
+let currentModalRO = null;
+function dl(items) { return items.map(([k, v]) => `<div class="flex justify-between gap-2"><dt class="text-slate-500">${k}</dt><dd class="font-medium text-slate-700 text-right">${v}</dd></div>`).join(''); }
+function openModal(ro) {
+  const r = DATA.find(d => d.ro === ro); if (!r) return;
+  currentModalRO = ro;
+  const c = cobroInfo(r), f = faltantes(r);
+  document.getElementById('mTitle').textContent = `RO ${r.ro} — ${r.consignatario || '(sin consignatario)'}`;
+  document.getElementById('mSub').textContent = `${r.ruta} · ${r.servicio} · ${r.naviera || 'sin naviera'} · Cierre ${r.cierre || '—'}`;
+  const est = document.getElementById('mEstado');
+  est.textContent = r.estado;
+  est.className = 'text-xs font-semibold rounded-full px-3 py-1 ' + (ESTADO_BADGE[r.estado] || 'bg-slate-100 text-slate-700');
+  document.getElementById('mComercial').innerHTML = dl([
+    ['BROKER', cellVal(r, 'broker')], ['COMISION PROPIA', Number(r.comision) > 0 ? fmt$(r.comision) : cellVal(r, 'comision')],
+    ['CIERRE', cellVal(r, 'cierre')], ['VALIDEZ', esc(r.validez || '—')],
+    ['SEGURO.', r.seguroAplica ? `<span class="text-xs rounded px-1.5 py-0.5 ${SEGURO_BADGE[r.seguroAplica]}">${r.seguroAplica}</span>` : cellVal(r, 'seguroAplica')],
+    ['Prima seguro', Number(r.seguroPrima) > 0 ? fmt$(r.seguroPrima) : '—'], ['OBSERVACION', esc(r.observacion || '—')]
+  ]);
+  document.getElementById('mCobro').innerHTML = dl([
+    ['Estado', `<span class="text-xs rounded px-1.5 py-0.5 ${COBRO_BADGE[c.estado]}">${c.estado}</span>`],
+    ['Pago del cliente', esc(r.fechaPagoCliente || 'pendiente')],
+    ['Comisión cobrada', fmt$(c.cob)], ['Saldo por cobrar', `<span class="${c.saldo ? 'text-amber-700' : ''}">${fmt$(c.saldo)}</span>`],
+    ['Fecha cobro', esc(r.fechaCobro || '—')]
+  ]) + (canEdit() && c.com > 0 && c.estado !== 'COBRADA' ? `<button type="button" onclick="const ro=currentModalRO; closeModal(); openCobro(ro)" class="mt-2 text-xs bg-amber-400 hover:bg-amber-300 text-slate-900 font-medium rounded-full px-3 py-1.5">Registrar pago / cobro</button>` : '');
+  document.getElementById('mOperativo').innerHTML = dl([
+    ['SERVICIO', cellVal(r, 'servicio')], ['RUTA', cellVal(r, 'ruta')], ['NAVIERA', esc(r.naviera || '—')], ['CANTIDAD', esc(r.cantidad || '—')],
+    ['ETD', cellVal(r, 'etd')], ['ETA', cellVal(r, 'eta')], ['AGENTE/COLOAD', cellVal(r, 'agente')], ['REF CLIENTE/PROVEEDOR', cellVal(r, 'ref')], ['Etapa', esc(etapa(r))]
+  ]);
+  const t = hoy();
+  const pasos = [['ETD (zarpe)', r.etd], ['ETA (arribo)', r.eta], ['Pago del cliente', r.fechaPagoCliente], ['Cobro comisión', c.estado === 'COBRADA' ? r.fechaCobro : '']];
+  document.getElementById('mTimeline').innerHTML = pasos.map(([label, fecha], i) => {
+    const d = parseDate(fecha), done = d && (i > 1 || d <= t);
+    return `<li class="rounded-lg border px-3 py-2 ${done ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200'}">
+      <div class="text-xs ${done ? 'text-emerald-700' : 'text-slate-400'}">${done ? '✔' : '○'} ${label}</div>
+      <div class="text-sm font-medium ${done ? 'text-slate-800' : 'text-slate-400'}">${esc(fecha || 'pendiente')}</div></li>`;
+  }).join('');
+  const alertas = [
+    ...f.obligatorios.map(k => `<li class="text-red-600">• Falta dato obligatorio: ${LABELS[k]}</li>`),
+    ...f.importantes.map(k => `<li class="text-amber-700">• Falta dato importante: ${LABELS[k]}</li>`),
+    ...(c.cobrable ? [`<li class="text-amber-700">• Comisión lista para cobrar: ${fmt$(c.saldo)} (cliente pagó hace ${c.diasDesdePago} días)</li>`] : []),
+    ...(c.diasSinPago > 30 ? [`<li class="text-violet-700">• La carga arribó hace ${c.diasSinPago} días y el cliente aún no paga</li>`] : []),
+    ...(r.alertas || []).map(a => `<li class="text-red-600">• ${esc(a)}</li>`),
+  ];
+  document.getElementById('mAlertas').innerHTML = alertas.join('') || '<li class="text-emerald-600">Sin alertas — todo en orden ✔</li>';
+  document.getElementById('modal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
+function editFromModal() { const ro = currentModalRO; closeModal(); openROForm(ro); }
+
+// ============ PRIORIDAD ============
 function togglePriority(ro, checked) {
   const r = DATA.find(x => x.ro === ro);
   if (!r) return;
@@ -764,46 +1298,44 @@ function togglePriority(ro, checked) {
   applyFilters();
 }
 
-function renderEtaAlerts(rows = DATA) {
-  const alerts = [];
-  rows.forEach(r => {
-    (r.alertas || []).filter(a => /eta/i.test(a)).forEach(a => alerts.push({ro:r.ro, cliente:r.consignatario, ruta:r.ruta, texto:a}));
-  });
-  const count = document.getElementById('etaAlertCount');
-  const list = document.getElementById('etaAlertsList');
-  if (count) count.textContent = `${alerts.length} alertas`;
-  if (list) list.innerHTML = alerts.map(a => `
-    <li class="rounded-md bg-red-50/70 border border-red-100 px-3 py-2">
-      <div class="flex flex-wrap justify-between gap-1">
-        <span class="font-semibold text-slate-700">RO ${a.ro}</span>
-        <span class="text-xs text-slate-500">${a.ruta}</span>
-      </div>
-      <div class="text-xs text-slate-500">${a.cliente}</div>
-      <div class="text-xs text-red-700 mt-1">• ${a.texto}</div>
-    </li>`).join('') || `<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3">No hay alertas ETA activas.</li>`;
+// ============ COBRO DE COMISIÓN ============
+let selectedCobroRO = null;
+function openCobro(ro) {
+  const r = DATA.find(x => x.ro === ro); if (!r) return;
+  selectedCobroRO = ro;
+  const c = cobroInfo(r);
+  document.getElementById('cobroLabel').textContent = `RO ${r.ro} · ${r.consignatario} · comisión ${fmt$(c.com)}`;
+  document.getElementById('cbPagoCliente').value = toIsoDate(r.fechaPagoCliente) || toIsoDate(fmtDate(hoy()));
+  document.getElementById('cbCobrado').value = c.cob || '';
+  document.getElementById('cbFechaCobro').value = toIsoDate(r.fechaCobro);
+  document.getElementById('cbSaldo').textContent = `Saldo actual por cobrar: ${fmt$(c.saldo)}`;
+  document.getElementById('cobroFeedback').textContent = '';
+  document.getElementById('cobroBox').classList.remove('hidden');
+  document.getElementById('cobroBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function closeCobro() { document.getElementById('cobroBox').classList.add('hidden'); selectedCobroRO = null; }
+function saveCobro(total) {
+  const r = DATA.find(x => x.ro === selectedCobroRO); if (!r) return;
+  const fb = document.getElementById('cobroFeedback');
+  const pago = normDate(document.getElementById('cbPagoCliente').value);
+  let cobrado = Number(document.getElementById('cbCobrado').value) || 0;
+  let fechaCobro = normDate(document.getElementById('cbFechaCobro').value);
+  if (total) { cobrado = Number(r.comision) || 0; if (!fechaCobro) fechaCobro = fmtDate(hoy()); }
+  if (cobrado > 0 && !pago) { fb.textContent = 'Primero registra la fecha en que el cliente pagó el servicio.'; return; }
+  if (cobrado > 0 && !fechaCobro) fechaCobro = fmtDate(hoy());
+  if (cobrado > (Number(r.comision) || 0) + 0.001) { fb.textContent = `El monto cobrado supera la comisión (${fmt$(r.comision)}).`; return; }
+  r.fechaPagoCliente = pago; r.cobrado = cobrado; r.fechaCobro = cobrado > 0 ? fechaCobro : '';
+  persist(r, ['fechaPagoCliente', 'cobrado', 'fechaCobro']).catch(e => showImportFeedback('No se guardó el cobro: ' + errMsg(e), false));
+  const c = cobroInfo(r);
+  fb.textContent = c.estado === 'COBRADA' ? `Comisión de ${r.ro} cobrada por completo.` : `Guardado. Estado: ${c.estado.toLowerCase()} · saldo ${fmt$(c.saldo)}.`;
+  document.getElementById('cbSaldo').textContent = `Saldo actual por cobrar: ${fmt$(c.saldo)}`;
+  applyFilters();
 }
 
-function renderUninsured(rows = DATA) {
-  const uninsured = rows.filter(r => !(Number(r.seguro) > 0) && r.seguroEstado !== 'NO_CONTRATADO');
-  const confirmed = rows.filter(r => r.seguroEstado === 'NO_CONTRATADO');
-  document.getElementById('uninsuredCount').textContent = `${uninsured.length} pendientes · ${confirmed.length} confirmados`;
-  const list = document.getElementById('listUninsured');
-  list.innerHTML = uninsured.map(r => `
-    <li class="rounded-md border px-3 py-2 ${r.ro === selectedInsuranceRO ? 'border-sky-300 bg-sky-50/60' : 'border-amber-100 bg-amber-50/40'}">
-      <div class="flex items-start justify-between gap-2">
-        <div class="min-w-0">
-          <button type="button" onclick="openInsuranceCalculator('${r.ro}')" class="text-sky-700 hover:underline font-semibold">RO ${r.ro}</button>
-          <div class="text-xs text-slate-500 truncate">${r.consignatario} · ${r.ruta}</div>
-          <span class="inline-block mt-1 text-[11px] rounded bg-amber-100 text-amber-800 px-1.5 py-0.5">Pendiente de confirmar</span>
-        </div>
-        <button type="button" onclick="openInsuranceCalculator('${r.ro}')" class="shrink-0 text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5">Gestionar</button>
-      </div>
-    </li>`).join('') || `<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">No hay operaciones pendientes de revisión de seguro.</li>`;
-}
-
+// ============ SEGURO (SEGURO. = APLICA / NO APLICA) ============
+let selectedInsuranceRO = null;
 function openInsuranceCalculator(ro) {
-  const r = DATA.find(x => x.ro === ro);
-  if (!r) return;
+  const r = DATA.find(x => x.ro === ro); if (!r) return;
   selectedInsuranceRO = ro;
   document.getElementById('insuranceCalculator').classList.remove('hidden');
   document.getElementById('calcROLabel').textContent = `RO ${r.ro} · ${r.consignatario}`;
@@ -812,19 +1344,18 @@ function openInsuranceCalculator(ro) {
   document.getElementById('premiumResult').value = '$0.00';
   document.getElementById('minApplied').classList.add('hidden');
   document.getElementById('insuranceFeedback').textContent = '';
-  document.getElementById('insuranceCalculator').scrollIntoView({behavior:'smooth', block:'nearest'});
+  document.getElementById('insuranceCalculator').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  renderUninsured(filteredRows());
 }
-
-// Prima mínima editable, guardada en el navegador (localStorage)
 const MIN_KEY = 'crm_prima_minima_usd';
 const DEFAULT_MIN = 60;
 let minSaveTimer = null;
 function loadMinPremium() {
-  let v = DEFAULT_MIN;
   if (IS_GAS && APP.config && APP.config.PrimaMinima !== undefined && APP.config.PrimaMinima !== '') {
     document.getElementById('insuranceMin').value = Number(APP.config.PrimaMinima);
     return;
   }
+  let v = DEFAULT_MIN;
   try { const s = localStorage.getItem(MIN_KEY); if (s !== null && !isNaN(Number(s))) v = Number(s); } catch (e) {}
   document.getElementById('insuranceMin').value = v;
 }
@@ -837,7 +1368,6 @@ function saveMinPremium() {
     minSaveTimer = setTimeout(() => api('setConfig', 'PrimaMinima', v).catch(e => showImportFeedback('No se guardó la prima mínima: ' + errMsg(e), false)), 800);
   }
 }
-
 function calculatePremium() {
   const value = Number(document.getElementById('insuredValue').value) || 0;
   const rate = Number(document.getElementById('insuranceRate').value) || 0;
@@ -845,56 +1375,43 @@ function calculatePremium() {
   const base = value * rate / 100;
   const premium = value > 0 ? Math.max(base, minimum) : 0;
   document.getElementById('minApplied').classList.toggle('hidden', !(value > 0 && minimum > base));
-  document.getElementById('premiumResult').value = '$' + premium.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('premiumResult').value = '$' + premium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return premium;
 }
-
 function saveCalculatedInsurance() {
-  const r = DATA.find(x => x.ro === selectedInsuranceRO);
-  if (!r) return;
+  const r = DATA.find(x => x.ro === selectedInsuranceRO); if (!r) return;
   const premium = calculatePremium();
-  if (premium <= 0) {
-    document.getElementById('insuranceFeedback').textContent = 'Ingresa un valor asegurado y una tasa válida para calcular la prima.';
-    return;
-  }
-  r.seguro = Number(premium.toFixed(2));
-  r.seguroEstado = 'CONTRATADO';
-  persist(r, ['seguro','seguroEstado']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
-  document.getElementById('insuranceFeedback').textContent = `Prima de USD ${premium.toFixed(2)} registrada para ${r.ro}.`;
+  if (premium <= 0) { document.getElementById('insuranceFeedback').textContent = 'Ingresa un valor asegurado y una tasa válida para calcular la prima.'; return; }
+  r.seguroAplica = 'APLICA';
+  r.seguroPrima = Number(premium.toFixed(2));
+  persist(r, ['seguroAplica', 'seguroPrima']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
+  document.getElementById('insuranceFeedback').textContent = `SEGURO. = APLICA · prima USD ${premium.toFixed(2)} para ${r.ro}.`;
   applyFilters();
 }
-
 function confirmNoInsurance() {
-  const r = DATA.find(x => x.ro === selectedInsuranceRO);
-  if (!r) return;
-  if (!confirm(`¿Confirmas que la operación ${r.ro} no tiene seguro contratado?`)) return;
-  r.seguro = 0;
-  r.seguroEstado = 'NO_CONTRATADO';
-  persist(r, ['seguro','seguroEstado']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
-  document.getElementById('insuranceFeedback').textContent = `Se confirmó que ${r.ro} no tiene seguro contratado.`;
+  const r = DATA.find(x => x.ro === selectedInsuranceRO); if (!r) return;
+  if (!confirm(`¿Confirmas que en la operación ${r.ro} el seguro NO APLICA?`)) return;
+  r.seguroAplica = 'NO APLICA';
+  r.seguroPrima = 0;
+  persist(r, ['seguroAplica', 'seguroPrima']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
+  document.getElementById('insuranceFeedback').textContent = `SEGURO. = NO APLICA para ${r.ro}.`;
   applyFilters();
 }
-
-function closeInsuranceCalculator() {
-  document.getElementById('insuranceCalculator').classList.add('hidden');
-  selectedInsuranceRO = null;
-}
-
+function closeInsuranceCalculator() { document.getElementById('insuranceCalculator').classList.add('hidden'); selectedInsuranceRO = null; renderUninsured(filteredRows()); }
 document.addEventListener('input', event => {
   if (!event.target) return;
   if (event.target.id === 'insuranceMin') saveMinPremium();
-  if (['insuredValue','insuranceRate','insuranceMin'].includes(event.target.id)) calculatePremium();
+  if (['insuredValue', 'insuranceRate', 'insuranceMin'].includes(event.target.id)) calculatePremium();
 });
 
 // ============ CSV ============
 function exportCSV() {
-  const rows = rowsToSheet(DATA);
+  const rows = rowsToSheet(filteredRows());
   const headers = EXCEL_COLUMNS.map(c => c[1]);
-  const esc = v => `"${(v ?? '').toString().replace(/"/g,'""')}"`;
-  const csv = '\ufeff' + headers.map(esc).join(',') + '\n' + rows.map(o => headers.map(h => esc(o[h])).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const q = v => `"${(v ?? '').toString().replace(/"/g, '""')}"`;
+  const csv = '﻿' + headers.map(q).join(',') + '\n' + rows.map(o => headers.map(h => q(o[h])).join(',')).join('\n');
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
   a.download = 'control_oportunidades.csv';
   a.click();
 }
@@ -903,17 +1420,19 @@ function exportCSV() {
 function showImportFeedback(msg, ok) {
   const el = document.getElementById('importFeedback');
   el.textContent = msg;
-  el.className = 'mb-4 rounded-lg px-4 py-2 text-sm ' + (ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200');
+  el.className = 'mb-4 rounded-full px-4 py-2 text-sm ' + (ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200');
 }
 async function handleExcelImport(input) {
   const file = input.files && input.files[0];
   if (!file) return;
   try {
     DATA = await importExcelFile(file);
+    if (DATA.clientes) { CLIENTES = DATA.clientes; saveClientes(); }
     saveData();
     fillSelects();
     applyFilters();
-    showImportFeedback(`Se importaron ${DATA.length} oportunidades desde "${file.name}". El calendario de arribos usa los mismos datos.`, true);
+    const ob = DATA.filter(r => faltantes(r).obligatorios.length).length, im = DATA.filter(r => faltantes(r).importantes.length).length;
+    showImportFeedback(`Se importaron ${DATA.length} RO desde "${file.name}". ${ob} con datos obligatorios faltantes · ${im} con datos importantes faltantes (ver panel Datos faltantes).`, !ob);
   } catch (e) {
     showImportFeedback('No se pudo importar el Excel: ' + e.message, false);
   }
@@ -929,80 +1448,83 @@ function restoreSample() {
 }
 
 // ============ REGISTRO / EDICIÓN DE RO ============
+const nivelDe = Object.fromEntries(FEED_COLUMNS.map(c => [c[0], c[3]]));
 const FORM_FIELDS = [
-  { sec:'Comercial', key:'ro', label:'RO *', req:true },
-  { sec:'Comercial', key:'consignatario', label:'Consignatario *', req:true },
-  { sec:'Comercial', key:'ref', label:'Ref cliente' },
-  { sec:'Comercial', key:'broker', label:'Broker', list:'broker' },
-  { sec:'Comercial', key:'comision', label:'Comisión USD', type:'number' },
-  { sec:'Comercial', key:'estado', label:'Estado', type:'select', options:['ABIERTA','CERRADA','GANADA','PERDIDA'] },
-  { sec:'Comercial', key:'cierre', label:'Cierre', type:'date' },
-  { sec:'Comercial', key:'validez', label:'Validez cotización', type:'date' },
-  { sec:'Operativo', key:'servicio', label:'Servicio *', type:'select', options:['FCL','LCL','Aéreo','Terrestre'], req:true },
-  { sec:'Operativo', key:'ruta', label:'Ruta * (Ej. LIM→SHA)', list:'ruta', req:true },
-  { sec:'Operativo', key:'naviera', label:'Naviera / Aerolínea', list:'naviera' },
-  { sec:'Operativo', key:'agente', label:'Agente / Coload' },
-  { sec:'Operativo', key:'etd', label:'ETD *', type:'date', req:true },
-  { sec:'Operativo', key:'eta', label:'ETA *', type:'date', req:true },
-  { sec:'Financiero y control', key:'pendiente', label:'Pendiente USD', type:'number' },
-  { sec:'Financiero y control', key:'seguro', label:'Seguro prima USD', type:'number' },
-  { sec:'Financiero y control', key:'seguroEstado', label:'Estado seguro', type:'select', options:[['','Pendiente de confirmar'],['CONTRATADO','Contratado'],['NO_CONTRATADO','No contratado']] },
-  { sec:'Financiero y control', key:'sem', label:'Semáforo', type:'select', options:[['verde','Verde'],['ambar','Ámbar'],['rojo','Rojo']] },
-  { sec:'Financiero y control', key:'prioridad', label:'Prioridad alta', type:'checkbox' },
-  ...MILESTONES.map(m => ({ sec:'Timeline (fecha en que se cumplió cada hito)', key:'hito:' + m, label:m, type:'date' })),
-  { sec:'Alertas', key:'alertas', label:'Alertas (una por línea; las que dicen "ETA" van al panel de alertas ETA)', type:'textarea' },
-];
-const fieldId = f => 'ff_' + f.key.replace(/[^a-z0-9]/gi, '_');
-let editingRO = null;
+  { sec:'Comercial', key:'ro' },
+  { sec:'Comercial', key:'cierre', type:'date' },
+  { sec:'Comercial', key:'validez', type:'date' },
+  { sec:'Comercial', key:'broker', list:'broker' },
+  { sec:'Comercial', key:'comision', type:'number' },
+  { sec:'Comercial', key:'estado', type:'select', options:['ABIERTA','CERRADA','GANADA','PERDIDA'] },
+  { sec:'Operativo', key:'servicio', type:'select', options:['', 'FCL', 'LCL', 'Aéreo', 'Terrestre'] },
+  { sec:'Operativo', key:'consignatario', list:'consignatario' },
+  { sec:'Operativo', key:'ref' },
+  { sec:'Operativo', key:'agente', list:'agente' },
+  { sec:'Operativo', key:'ruta', list:'ruta' },
+  { sec:'Operativo', key:'naviera', list:'naviera' },
+  { sec:'Operativo', key:'etd', type:'date' },
+  { sec:'Operativo', key:'eta', type:'date' },
+  { sec:'Operativo', key:'cantidad' },
+  { sec:'Seguro y control', key:'seguroAplica', type:'select', options:[['', 'Sin definir'], ['APLICA', 'APLICA'], ['NO APLICA', 'NO APLICA']] },
+  { sec:'Seguro y control', key:'seguroPrima', type:'number' },
+  { sec:'Seguro y control', key:'prioridad', type:'checkbox', label:'Prioridad alta' },
+  { sec:'Cobro de comisión (después del pago del cliente)', key:'fechaPagoCliente', type:'date' },
+  { sec:'Cobro de comisión (después del pago del cliente)', key:'cobrado', type:'number' },
+  { sec:'Cobro de comisión (después del pago del cliente)', key:'fechaCobro', type:'date' },
+  { sec:'Observación y alertas', key:'observacion', type:'textarea' },
+  { sec:'Observación y alertas', key:'alertas', type:'textarea', label:'Alertas (una por línea; las que dicen "ETA" van al panel de alertas ETA)' },
+].map(f => ({ ...f, nivel: nivelDe[f.key] || '', label: f.label || LABELS[f.key] }));
+const fieldId = f => 'ff_' + f.key;
+let editingRO = null, warnedImportant = false;
 
 function buildROForm() {
   const body = document.getElementById('roFormBody');
   if (body.dataset.built) return;
-  const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500';
-  const secs = [...new Set(FORM_FIELDS.map(f => f.sec))];
-  body.innerHTML = secs.map(sec => {
-    const isTl = sec.startsWith('Timeline');
+  const inputCls = 'w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500';
+  const mark = f => f.nivel === 'obligatorio' ? ' <span class="text-red-600 font-semibold">*</span>' : f.nivel === 'importante' ? ' <span class="text-amber-600">●</span>' : '';
+  body.innerHTML = [...new Set(FORM_FIELDS.map(f => f.sec))].map(sec => {
     const fields = FORM_FIELDS.filter(f => f.sec === sec).map(f => {
       const id = fieldId(f);
-      let input;
-      if (f.type === 'select') input = `<select id="${id}" class="${inputCls}">${f.options.map(o => Array.isArray(o) ? `<option value="${o[0]}">${o[1]}</option>` : `<option>${o}</option>`).join('')}</select>`;
-      else if (f.type === 'checkbox') return `<label class="flex items-center gap-2 text-sm text-slate-700 pt-5"><input id="${id}" type="checkbox" class="rounded border-slate-300 text-sky-600"> ${f.label}</label>`;
-      else if (f.type === 'textarea') return `<div class="sm:col-span-2"><label for="${id}" class="block text-xs text-slate-500 mb-1">${f.label}</label><textarea id="${id}" rows="3" class="${inputCls}"></textarea></div>`;
-      else input = `<input id="${id}" type="${f.type || 'text'}" ${f.type === 'number' ? 'min="0" step="0.01"' : ''} ${f.list ? `list="dl_${f.list}"` : ''} class="${inputCls}">`;
-      const dot = isTl ? `<span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${MILESTONE_COLORS[f.label]}"></span>` : '';
-      return `<div><label for="${id}" class="block text-xs text-slate-500 mb-1">${dot}${f.label}</label>${input}</div>`;
+      if (f.type === 'checkbox') return `<label class="flex items-center gap-2 text-sm text-slate-700 pt-4"><input id="${id}" type="checkbox" class="rounded border-slate-300 text-sky-600"> ${f.label}</label>`;
+      if (f.type === 'textarea') return `<div class="sm:col-span-2"><label for="${id}" class="block text-xs text-slate-500 mb-1">${f.label}</label><textarea id="${id}" rows="2" class="${inputCls}"></textarea></div>`;
+      const input = f.type === 'select'
+        ? `<select id="${id}" class="${inputCls}">${f.options.map(o => Array.isArray(o) ? `<option value="${o[0]}">${o[1]}</option>` : `<option value="${o}">${o || '—'}</option>`).join('')}</select>`
+        : `<input id="${id}" type="${f.type || 'text'}" ${f.type === 'number' ? 'min="0" step="0.01"' : ''} ${f.list ? `list="dl_${f.list}"` : ''} class="${inputCls}">`;
+      return `<div><label for="${id}" class="block text-xs text-slate-500 mb-1">${f.label}${mark(f)}</label>${input}</div>`;
     }).join('');
     return `<fieldset><legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">${sec}</legend>
-      <div class="grid grid-cols-1 sm:grid-cols-2 ${isTl ? 'lg:grid-cols-3' : ''} gap-3">${fields}</div></fieldset>`;
-  }).join('') + '<datalist id="dl_ruta"></datalist><datalist id="dl_naviera"></datalist><datalist id="dl_broker"></datalist>';
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${fields}</div></fieldset>`;
+  }).join('') + ['ruta', 'naviera', 'broker', 'agente', 'consignatario'].map(k => `<datalist id="dl_${k}"></datalist>`).join('');
   body.dataset.built = '1';
 }
 
 function suggestRO() {
   const y = new Date().getFullYear();
   const nums = DATA.map(r => String(r.ro).match(new RegExp('^' + y + '-(\\d+)$'))).filter(Boolean).map(m => Number(m[1]));
-  return `${y}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, '0')}`;
+  const n = (nums.length ? Math.max(...nums) : 0) + 1;
+  return `${y}-${String(n).padStart(nums.length && String(Math.max(...nums)).length > 2 ? String(Math.max(...nums)).length : 2, '0')}`;
 }
 
 function openROForm(ro) {
   buildROForm();
-  editingRO = ro || null;
+  editingRO = ro || null; warnedImportant = false;
   const r = ro ? DATA.find(x => x.ro === ro) : null;
   if (ro && !r) return;
-  ['ruta','naviera','broker'].forEach(k => {
-    document.getElementById('dl_' + k).innerHTML = [...new Set(DATA.map(d => d[k]).filter(Boolean))].sort().map(v => `<option value="${v}">`).join('');
+  document.getElementById('dl_consignatario').innerHTML = [...new Set([...CLIENTES.map(c => c.empresa), ...DATA.map(d => d.consignatario)].filter(v => !isBlank(v)))].sort().map(v => `<option value="${esc(v)}">`).join('');
+  ['ruta', 'naviera', 'broker', 'agente'].forEach(k => {
+    document.getElementById('dl_' + k).innerHTML = [...new Set(DATA.map(d => d[k]).filter(v => !isBlank(v)))].sort().map(v => `<option value="${esc(v)}">`).join('');
   });
-  const defaults = { ro: suggestRO(), estado:'ABIERTA', servicio:'FCL', sem:'verde', seguroEstado:'' };
+  const defaults = { ro: suggestRO(), estado: 'ABIERTA', cierre: fmtDate(hoy()) };
   FORM_FIELDS.forEach(f => {
     const el = document.getElementById(fieldId(f));
-    let v = r ? (f.key.startsWith('hito:') ? (r.hitos || {})[f.key.slice(5)] : r[f.key]) : defaults[f.key];
+    const v = r ? r[f.key] : defaults[f.key];
     if (f.type === 'checkbox') el.checked = !!v;
     else if (f.type === 'date') el.value = toIsoDate(v);
     else if (f.key === 'alertas') el.value = (v || []).join('\n');
-    else if (f.key === 'agente' && v === '—') el.value = '';
+    else if (f.type === 'number') el.value = Number(v) > 0 ? v : '';
     else el.value = v ?? '';
   });
-  const roEl = document.getElementById(fieldId(FORM_FIELDS[0]));
+  const roEl = document.getElementById('ff_ro');
   roEl.readOnly = !!r;
   roEl.classList.toggle('bg-slate-100', !!r);
   document.getElementById('roFormTitle').textContent = r ? `Editar RO ${r.ro}` : 'Nuevo RO';
@@ -1010,20 +1532,20 @@ function openROForm(ro) {
   document.getElementById('roFormError').textContent = '';
   document.getElementById('roModal').classList.remove('hidden');
   document.body.classList.add('modal-open');
-  setTimeout(() => (r ? document.getElementById(fieldId(FORM_FIELDS[1])) : roEl).focus(), 50);
+  setTimeout(() => (r ? document.getElementById('ff_broker') : roEl).focus(), 50);
 }
-
 function closeROForm() {
   document.getElementById('roModal').classList.add('hidden');
-  document.body.classList.remove('modal-open');
+  if (document.getElementById('modal').classList.contains('hidden')) document.body.classList.remove('modal-open');
   editingRO = null;
 }
 
 async function submitROForm(ev) {
   ev.preventDefault();
   const errEl = document.getElementById('roFormError');
-  const fail = m => { errEl.textContent = m; };
-  const r = { hitos: {}, alertas: [] };
+  const fail = (m, warn) => { errEl.textContent = m; errEl.className = 'text-xs ' + (warn ? 'text-amber-700' : 'text-red-600'); };
+  const prev = editingRO ? DATA.find(x => x.ro === editingRO) : null;
+  const r = { ...(prev || {}), alertas: [] };
   FORM_FIELDS.forEach(f => {
     const el = document.getElementById(fieldId(f));
     let v;
@@ -1032,20 +1554,20 @@ async function submitROForm(ev) {
     else if (f.type === 'number') v = Number(el.value) || 0;
     else if (f.key === 'alertas') v = el.value.split('\n').map(x => x.replace(/[<>]/g, '').trim()).filter(Boolean);
     else v = el.value.replace(/[<>]/g, '').trim();
-    if (f.key.startsWith('hito:')) { if (v) r.hitos[f.key.slice(5)] = v; } else r[f.key] = v;
+    r[f.key] = v;
   });
-  if (!r.agente) r.agente = '—';
-  const missing = FORM_FIELDS.filter(f => f.req && !r[f.key]).map(f => f.label.replace(/ \*.*$/, ''));
-  if (missing.length) return fail('Completa: ' + missing.join(', ') + '.');
+  const fl = faltantes(r);
+  if (fl.obligatorios.length) return fail('Completa los datos obligatorios: ' + fl.obligatorios.map(k => LABELS[k]).join(', ') + '.');
   const wasEditing = editingRO;
   if (!wasEditing && DATA.some(x => String(x.ro).toLowerCase() === r.ro.toLowerCase())) return fail(`Ya existe el RO ${r.ro}.`);
   const etd = parseDate(r.etd), eta = parseDate(r.eta);
   if (etd && eta && eta < etd) return fail('La ETA no puede ser anterior al ETD.');
-  let prev = null;
-  for (const m of MILESTONES) {
-    const d = parseDate(r.hitos[m]);
-    if (d && prev && d < prev.d) return fail(`"${m}" no puede ser anterior a "${prev.m}".`);
-    if (d) prev = { m, d };
+  if (r.cobrado > 0 && !r.fechaPagoCliente) return fail('La comisión se cobra después del pago del cliente: registra primero la fecha de pago del cliente.');
+  if (r.cobrado > (Number(r.comision) || 0) + 0.001) return fail('La comisión cobrada no puede superar la COMISION PROPIA.');
+  if (r.cobrado > 0 && !r.fechaCobro) r.fechaCobro = fmtDate(hoy());
+  if (fl.importantes.length && !warnedImportant) {
+    warnedImportant = true;
+    return fail('Faltan datos importantes: ' + fl.importantes.map(k => LABELS[k]).join(', ') + '. Pulsa Guardar otra vez para continuar igual.', true);
   }
   const btn = document.getElementById('roFormSave');
   const label = btn.textContent;
@@ -1072,10 +1594,219 @@ async function submitROForm(ev) {
   }
 }
 
+// ============ VISTAS (pestañas) ============
+let VIEW = 'resumen';
+function setView(v) {
+  VIEW = v;
+  try { localStorage.setItem('crm_view', v); } catch (e) {}
+  const desktop = window.innerWidth >= 1024;
+  const shown = v === 'seguimiento' && desktop ? 'resumen' : v;
+  document.querySelectorAll('[data-view]').forEach(el => el.classList.toggle('hidden', el.dataset.view !== shown));
+  document.querySelectorAll('[data-nav]').forEach(el => el.classList.toggle('active', el.dataset.nav === v || (v === 'seguimiento' && desktop && el.dataset.nav === 'resumen')));
+  // Panel lateral: en escritorio solo en Resumen; en celular es la pestaña "Cobros"
+  const side = document.getElementById('sidePanel'), grid = document.getElementById('appGrid');
+  const showSide = desktop ? (shown === 'resumen') : (v === 'seguimiento');
+  side.classList.toggle('hidden', !showSide);
+  side.classList.remove('lg:block');
+  grid.classList.toggle('lg:grid', desktop && showSide);
+  if (v === 'clientes') renderClientes();
+}
+let lastDesktop = window.innerWidth >= 1024;
+window.addEventListener('resize', () => { const d = window.innerWidth >= 1024; if (d !== lastDesktop) { lastDesktop = d; setView(VIEW); } });
+
+// ============ BD CLIENTES + ESTADÍSTICAS ============
+const isoWeek = d => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 864e5 + 1) / 7); };
+function opsDe(empresa) { const k = empresaKey(empresa); return DATA.filter(r => r.consignatario && empresaKey(r.consignatario) === k); }
+function statsCliente(empresa) {
+  const ops = opsDe(empresa), cs = ops.map(cobroInfo);
+  const ult = ops.map(r => parseDate(r.cierre)).filter(Boolean).sort((a, b) => b - a)[0];
+  return { ops, n: ops.length, com: sum(cs, c => c.com), cob: sum(cs, c => c.cob), saldo: sum(cs, c => c.saldo),
+           rutas: new Set(ops.map(r => r.ruta).filter(Boolean)).size, ultimo: ult ? fmtDate(ult) : '' };
+}
+const telLink = c => String(c || '').replace(/[^\d+]/g, '');
+const waLink = c => { let n = telLink(c).replace(/^\+/, ''); if (n.length === 9) n = '51' + n; return 'https://wa.me/' + n; };
+const iconBtn = (href, title, ico, ext) => `<a href="${href}" title="${title}" ${ext ? 'target="_blank" rel="noopener"' : ''} onclick="event.stopPropagation()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center">${ico}</a>`;
+function contactBtns(c) {
+  return (c.celular ? iconBtn('tel:' + telLink(c.celular), 'Llamar', '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>') + iconBtn(waLink(c.celular), 'WhatsApp', '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.4A8 8 0 1 1 21 12z"/></svg>', true) : '')
+       + (c.correo ? iconBtn('mailto:' + esc(c.correo), 'Correo', '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>') : '');
+}
+
+const CLI_COLS = [
+  { key:'empresa', label:'Empresa' }, { key:'contacto', label:'Contacto' }, { key:'celular', label:'Celular' }, { key:'correo', label:'Correo' },
+  { key:'direccion', label:'Dirección' }, { key:'distrito', label:'Distrito', select:true }, { key:'semana', label:'Semana', select:true },
+];
+const CLI_FILTERS = {};
+function buildCliHeader() {
+  const thead = document.getElementById('theadCli');
+  thead.innerHTML = `<tr>${CLI_COLS.map(c => `<th class="px-3 pt-3 pb-1 text-left font-medium bg-slate-50 whitespace-nowrap">${c.label}</th>`).join('')}
+      <th class="px-3 pt-3 pb-1 text-right font-medium bg-slate-50">RO</th><th class="px-3 pt-3 pb-1 text-right font-medium bg-slate-50">Comisión</th>
+      <th class="px-3 pt-3 pb-1 text-right font-medium bg-slate-50">Por cobrar</th><th class="px-3 pt-3 pb-1 bg-slate-50"></th></tr>
+    <tr>${CLI_COLS.map(c => `<th class="px-3 pb-2 bg-slate-50 border-b border-slate-200">${c.select ? `<select class="th-filter" data-ckey="${c.key}"><option value="">Todos</option></select>` : `<input class="th-filter" type="search" data-ckey="${c.key}" placeholder="Filtrar…">`}</th>`).join('')}
+      <th class="bg-slate-50 border-b border-slate-200" colspan="4"></th></tr>`;
+  thead.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.ckey; if (!k) return; CLI_FILTERS[k] = e.target.value; e.target.classList.toggle('active', !!e.target.value); renderClientes(); });
+}
+function clearCliFilters() { document.querySelectorAll('[data-ckey]').forEach(el => { el.value = ''; el.classList.remove('active'); }); Object.keys(CLI_FILTERS).forEach(k => CLI_FILTERS[k] = ''); renderClientes(); }
+function refreshCliOptions() {
+  CLI_COLS.filter(c => c.select).forEach(c => {
+    const sel = document.querySelector(`[data-ckey="${c.key}"]`); const cur = sel.value;
+    const vals = [...new Set(CLIENTES.map(x => isBlank(x[c.key]) ? VACIO : String(x[c.key])))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    sel.innerHTML = '<option value="">Todos</option>' + vals.map(v => `<option value="${esc(v)}">${c.key === 'semana' && v !== VACIO ? 'Semana ' + esc(v) : esc(v)}</option>`).join('');
+    sel.value = vals.includes(cur) ? cur : ''; CLI_FILTERS[c.key] = sel.value;
+  });
+}
+
+function renderClientes() {
+  refreshCliOptions();
+  const dash = '<span class="text-slate-400">—</span>';
+  const list = CLIENTES.filter(c => CLI_COLS.every(col => {
+    const f = CLI_FILTERS[col.key]; if (!f) return true;
+    const v = isBlank(c[col.key]) ? VACIO : String(c[col.key]);
+    return col.select ? v === f : (v === VACIO ? '' : v).toLowerCase().includes(f.trim().toLowerCase());
+  })).map(c => ({ c, s: statsCliente(c.empresa) })).sort((a, b) => b.s.com - a.s.com || a.c.empresa.localeCompare(b.c.empresa));
+  document.getElementById('cliCount').textContent = `${list.length} de ${CLIENTES.length}`;
+  const semana = isoWeek(hoy());
+  document.getElementById('tbodyCli').innerHTML = list.map(({ c, s }) => `
+    <tr class="row-hover" data-emp="${esc(c.empresa)}" onclick="openCliModal(this.dataset.emp)">
+      <td class="px-3 py-2 font-medium text-slate-800">${esc(c.empresa)}</td>
+      <td class="px-3 py-2 text-slate-600">${esc(c.contacto) || dash}</td>
+      <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${esc(c.celular) || dash}</td>
+      <td class="px-3 py-2 text-slate-600">${esc(c.correo) || dash}</td>
+      <td class="px-3 py-2 text-slate-600">${esc(c.direccion) || dash}</td>
+      <td class="px-3 py-2 text-slate-600">${esc(c.distrito) || dash}</td>
+      <td class="px-3 py-2">${c.semana ? `<span class="text-[11px] rounded-full px-2 py-0.5 ${String(c.semana) === String(semana) ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}">S${esc(c.semana)}</span>` : dash}</td>
+      <td class="px-3 py-2 text-right">${s.n}</td>
+      <td class="px-3 py-2 text-right font-medium">${fmt$(s.com)}</td>
+      <td class="px-3 py-2 text-right ${s.saldo ? 'text-amber-700' : 'text-slate-400'}">${fmt$(s.saldo)}</td>
+      <td class="px-3 py-2"><div class="flex items-center justify-end gap-1">${contactBtns(c)}</div></td>
+    </tr>`).join('') || '<tr><td colspan="11" class="px-4 py-4 text-center text-sm text-slate-400">No hay clientes con estos filtros.</td></tr>';
+
+  // Totalizadores
+  const all = CLIENTES.map(c => statsCliente(c.empresa));
+  const set = (id, v) => document.getElementById(id).textContent = v;
+  set('ckTotal', CLIENTES.length);
+  set('ckTotalSub', `${CLIENTES.filter(c => !c.celular && !c.correo).length} sin celular ni correo`);
+  set('ckActivos', all.filter(s => s.n).length);
+  set('ckActivosSub', `${fmt$(sum(all, s => s.com))} en comisiones`);
+  set('ckSemana', CLIENTES.filter(c => String(c.semana) === String(semana)).length);
+  set('ckSemanaSub', `clientes en la semana ${semana}`);
+
+  // Ranking por comisión
+  const rank = CLIENTES.map(c => ({ c, s: statsCliente(c.empresa) })).filter(x => x.s.com > 0).sort((a, b) => b.s.com - a.s.com).slice(0, 10);
+  const max = Math.max(1, ...rank.map(x => x.s.com));
+  document.getElementById('chartClientes').innerHTML = rank.map(({ c, s }) => `
+    <div class="cursor-pointer group" data-emp="${esc(c.empresa)}" onclick="openCliModal(this.dataset.emp)">
+      <div class="flex justify-between text-xs mb-1"><span class="text-slate-700 group-hover:text-sky-700">${esc(c.empresa)} <span class="text-slate-400">· ${s.n} RO · ${s.rutas} ruta(s)</span></span><span class="font-medium">${fmt$(s.com)}</span></div>
+      <div class="h-2.5 bg-slate-100 rounded-full flex overflow-hidden" style="width:${(s.com / max * 100).toFixed(0)}%">
+        <div class="bg-emerald-500" style="width:${s.com ? s.cob / s.com * 100 : 0}%"></div><div class="bg-amber-400" style="width:${s.com ? s.saldo / s.com * 100 : 0}%"></div>
+      </div>
+    </div>`).join('') || '<p class="text-xs text-slate-400">Aún no hay comisiones asociadas a clientes de la BD.</p>';
+
+  // Consignatarios con RO que no están en la BD
+  const keys = new Set(CLIENTES.map(c => empresaKey(c.empresa)));
+  const sinFicha = [...groupBy(DATA.filter(r => r.consignatario && !keys.has(empresaKey(r.consignatario))), r => r.consignatario)];
+  set('ckSinFicha', sinFicha.length);
+  document.getElementById('listSinFicha').innerHTML = sinFicha.map(([nombre, ops]) => `
+    <li class="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between gap-2">
+      <div class="min-w-0"><div class="text-sm text-slate-700 truncate">${esc(nombre)}</div><div class="text-xs text-slate-500">${ops.length} RO · ${fmt$(sum(ops, r => r.comision))}</div></div>
+      ${canEdit() ? `<button type="button" data-emp="${esc(nombre)}" onclick="openClienteForm(null, this.dataset.emp)" class="shrink-0 text-xs btn-primary px-3 py-1">Agregar</button>` : ''}
+    </li>`).join('') || '<li class="text-xs text-emerald-700">Todos los consignatarios tienen ficha ✔</li>';
+}
+
+// ---- Ficha de cliente con estadísticas ----
+let currentCli = null;
+function openCliModal(empresa) {
+  const c = CLIENTES.find(x => x.empresa === empresa) || { empresa };
+  currentCli = c.empresa;
+  const s = statsCliente(c.empresa);
+  document.getElementById('cfTitle').textContent = c.empresa;
+  document.getElementById('cfSub').textContent = [c.contacto, c.celular, c.correo, [c.direccion, c.distrito].filter(Boolean).join(', '), c.semana ? 'Semana ' + c.semana : ''].filter(Boolean).join(' · ') || 'Sin datos de contacto';
+  document.getElementById('cfActions').innerHTML = contactBtns(c)
+    + (canEdit() && CLIENTES.includes(c) ? `<button type="button" onclick="const e=currentCli; closeCliModal(); openClienteForm(e)" class="text-xs border border-slate-200 hover:bg-slate-50 px-3 py-1.5">Editar</button>` : '')
+    + `<button type="button" onclick="verOperacionesCliente()" class="text-xs btn-primary px-3 py-1.5">Ver en Operaciones</button>
+       <button type="button" onclick="closeCliModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none px-1">&times;</button>`;
+  const kpi = (l, v, cls = '') => `<div class="rounded-lg bg-slate-50 p-3"><p class="text-[11px] text-slate-500">${l}</p><p class="text-lg font-semibold ${cls}">${v}</p></div>`;
+  document.getElementById('cfKpis').innerHTML = kpi('RO', s.n) + kpi('Comisión total', fmt$(s.com)) + kpi('Cobrada', fmt$(s.cob), 'text-emerald-700') + kpi('Por cobrar', fmt$(s.saldo), 'text-amber-700') + kpi('Último cierre', s.ultimo || '—');
+  const cuenta = (arr, f) => [...groupBy(arr, f)].map(([k, l]) => ({ k: k || '(vacío)', n: l.length, com: sum(l, r => r.comision) })).sort((a, b) => b.n - a.n || b.com - a.com);
+  const rutas = cuenta(s.ops, r => r.ruta), maxR = Math.max(1, ...rutas.map(x => x.n));
+  document.getElementById('cfRutas').innerHTML = rutas.map(x => `
+    <div><div class="flex justify-between text-xs mb-1"><span class="text-slate-700">${esc(x.k)}</span><span class="text-slate-500">${x.n} RO · ${fmt$(x.com)}</span></div>
+    <div class="h-2 bg-slate-100 rounded-full"><div class="h-2 rounded-full btn-primary" style="width:${x.n / maxR * 100}%"></div></div></div>`).join('') || '<p class="text-xs text-slate-400">Sin operaciones</p>';
+  const chips = (t, arr) => `<div><p class="text-[11px] text-slate-500 mb-1">${t}</p><div class="flex flex-wrap gap-1">${arr.map(x => `<span class="text-[11px] rounded-full bg-slate-100 text-slate-700 px-2 py-0.5">${esc(x.k)} · ${x.n}</span>`).join('') || '<span class="text-xs text-slate-400">—</span>'}</div></div>`;
+  document.getElementById('cfMix').innerHTML = chips('Servicios', cuenta(s.ops, r => r.servicio)) + chips('Navieras', cuenta(s.ops, r => r.naviera)) + chips('Brokers', cuenta(s.ops, r => r.broker || '(sin broker)'));
+  const meses = [...groupBy([...s.ops].sort((a, b) => mesCierre(a).localeCompare(mesCierre(b))), mesCierre)].slice(-8), maxM = Math.max(1, ...meses.map(([, l]) => l.length));
+  document.getElementById('cfMeses').innerHTML = meses.map(([k, l]) => `
+    <div class="flex-1 flex flex-col items-center justify-end h-full gap-1" title="${mesLabel(k)}: ${l.length} RO · ${fmt$(sum(l, r => r.comision))}">
+      <span class="text-[10px] text-slate-500">${l.length}</span>
+      <div class="w-full max-w-[28px] rounded-t-xl rounded-b-md btn-primary" style="height:${Math.max(8, l.length / maxM * 80)}%"></div>
+      <span class="text-[10px] text-slate-500">${k ? mesLabel(k).slice(0, 3) : '—'}</span>
+    </div>`).join('') || '<p class="text-xs text-slate-400">Sin operaciones</p>';
+  document.getElementById('cfRO').innerHTML = [...s.ops].sort((a, b) => (parseDate(b.cierre) || 0) - (parseDate(a.cierre) || 0)).map(r => {
+    const c2 = cobroInfo(r);
+    return `<tr class="row-hover" data-ro="${esc(r.ro)}" onclick="closeCliModal(); openModal(this.dataset.ro)">
+      <td class="px-3 py-2 font-medium">${esc(r.ro)}</td><td class="px-3 py-2 text-slate-600">${esc(r.cierre)}</td><td class="px-3 py-2 text-slate-600">${esc(r.ruta)}</td>
+      <td class="px-3 py-2 text-slate-600">${esc(r.servicio)}</td><td class="px-3 py-2 text-slate-600">${esc(r.eta)}</td><td class="px-3 py-2 text-right">${fmt$(r.comision)}</td>
+      <td class="px-3 py-2"><span class="text-[11px] rounded-full px-2 py-0.5 ${COBRO_BADGE[c2.estado]}">${c2.estado.toLowerCase()}</span></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="px-3 py-4 text-center text-xs text-slate-400">Este cliente aún no tiene RO registrados.</td></tr>';
+  document.getElementById('cliModal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+function closeCliModal() { document.getElementById('cliModal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
+function verOperacionesCliente() {
+  const nombre = currentCli; closeCliModal(); clearFilters();
+  const inp = document.querySelector('.th-filter[data-key="consignatario"]');
+  inp.value = nombre; FILTERS.consignatario = nombre; inp.classList.add('active');
+  setView('operaciones'); applyFilters();
+}
+
+// ---- Alta / edición de cliente ----
+let editingCli = null;
+function openClienteForm(empresa, sugerido) {
+  editingCli = empresa || null;
+  const c = empresa ? CLIENTES.find(x => x.empresa === empresa) : { empresa: sugerido || '' };
+  document.getElementById('cliFormBody').innerHTML = CLIENT_COLUMNS.map(([k, h, req]) => `<div class="${k === 'direccion' ? 'sm:col-span-2' : ''}">
+      <label class="block text-xs text-slate-500 mb-1">${h}${req ? ' <span class="text-red-600 font-semibold">*</span>' : ''}</label>
+      <input id="cf_${k}" type="${k === 'correo' ? 'email' : k === 'celular' ? 'tel' : 'text'}" ${k === 'distrito' ? 'list="dl_distrito"' : ''} value="${esc((c || {})[k] || '')}" class="w-full border rounded-lg px-3 py-2 text-sm" ${k === 'semana' ? `placeholder="Ej. ${isoWeek(hoy())}"` : ''}></div>`).join('')
+    + `<datalist id="dl_distrito">${[...new Set(CLIENTES.map(x => x.distrito).filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+  document.getElementById('cliFormTitle').textContent = empresa ? 'Editar cliente' : 'Nuevo cliente';
+  document.getElementById('cliFormError').textContent = '';
+  document.getElementById('cliFormModal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  setTimeout(() => document.getElementById('cf_empresa').focus(), 50);
+}
+function closeClienteForm() { document.getElementById('cliFormModal').classList.add('hidden'); document.body.classList.remove('modal-open'); editingCli = null; }
+async function submitClienteForm(ev) {
+  ev.preventDefault();
+  const err = document.getElementById('cliFormError');
+  const c = Object.fromEntries(CLIENT_COLUMNS.map(([k]) => [k, document.getElementById('cf_' + k).value.replace(/[<>]/g, '').trim()]));
+  if (!c.empresa) { err.textContent = 'EMPRESA es obligatorio.'; return; }
+  if (c.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.correo)) { err.textContent = 'El correo no tiene un formato válido.'; return; }
+  c.semana = c.semana.replace(/^s(emana)?\s*/i, '');
+  if (c.semana && !(/^\d{1,2}$/.test(c.semana) && Number(c.semana) >= 1 && Number(c.semana) <= 53)) { err.textContent = 'SEMANA debe ser un número de semana (1–53).'; return; }
+  const orig = editingCli;
+  if (CLIENTES.some(x => x.empresa !== orig && empresaKey(x.empresa) === empresaKey(c.empresa))) { err.textContent = `Ya existe el cliente ${c.empresa}.`; return; }
+  const btn = document.getElementById('cliFormSave'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    if (IS_GAS) { await api('upsertCliente', clientesToSheet([c])[0], orig || ''); DATA = await loadAllData(); }
+    else { if (orig) CLIENTES[CLIENTES.findIndex(x => x.empresa === orig)] = c; else CLIENTES.push(c); saveClientes(); }
+    closeClienteForm(); renderClientes();
+    showImportFeedback(orig ? `Cliente ${c.empresa} actualizado.` : `Cliente ${c.empresa} agregado a la BD.`, true);
+  } catch (e) { err.textContent = 'No se pudo guardar: ' + errMsg(e); }
+  finally { btn.disabled = false; btn.textContent = 'Guardar cliente'; }
+}
+async function handleClientesImport(input) {
+  const file = input.files && input.files[0]; if (!file) return;
+  try {
+    const list = await importClientesFile(file);
+    if (IS_GAS) showImportFeedback('Con Google Sheets, pega los clientes en la hoja "Clientes" de la planilla.', false);
+    else { CLIENTES = list; saveClientes(); renderClientes(); showImportFeedback(`Se importaron ${list.length} clientes desde "${file.name}".`, true); }
+  } catch (e) { showImportFeedback('No se pudo importar: ' + e.message, false); }
+  input.value = '';
+}
+
 // ============ INIT ============
-['fSearch','fRuta','fNaviera','fBroker','fServicio','fEstado'].forEach(id =>
-  document.getElementById(id).addEventListener('input', applyFilters)
-);
+buildHeader();
+buildCliHeader();
+document.getElementById('chkAgrupar').addEventListener('change', applyFilters);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeROForm(); } });
 (async () => {
   document.getElementById('footerCount').textContent = 'Cargando oportunidades…';
@@ -1089,7 +1820,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal
   loadMinPremium();
   fillSelects();
   applyFilters();
-  // Abrir detalle desde el calendario
+  let v = 'resumen'; try { v = localStorage.getItem('crm_view') || 'resumen'; } catch (e) {}
+  setView(['resumen', 'operaciones', 'clientes', 'seguimiento'].includes(v) ? v : 'resumen');
   const ro = await getRequestedRO();
   if (ro) openModal(ro);
 })();
