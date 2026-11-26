@@ -47,6 +47,7 @@
   .th-filter { width: 100%; min-width: 64px; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0;
                border-radius: 6px; padding: 3px 8px; }
   .th-filter.active { border-color: #00d26a !important; }
+  select.th-filter { max-width: 150px; text-overflow: ellipsis; }
   thead.sticky-head th { position: sticky; top: 0; z-index: 2; }
   .nav-pill { color: #8c8c8c; }
   .nav-pill.active { background: #ececec; color: #121212; }
@@ -134,12 +135,20 @@
           <input id="cbPagoCliente" type="date" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
         </div>
         <div>
-          <label class="block text-xs text-slate-500 mb-1">Comisión cobrada (USD, acumulado)</label>
+          <label id="cbLblPropia" class="block text-xs text-slate-500 mb-1">Comisión propia cobrada (USD)</label>
           <input id="cbCobrado" type="number" min="0" step="0.01" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
         </div>
         <div>
           <label class="block text-xs text-slate-500 mb-1">Fecha de cobro</label>
           <input id="cbFechaCobro" type="date" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
+        </div>
+        <div>
+          <label id="cbLblBroker" class="block text-xs text-slate-500 mb-1">Comisión broker cobrada (USD)</label>
+          <input id="cbCobradoBroker" type="number" min="0" step="0.01" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Fecha de cobro broker</label>
+          <input id="cbFechaCobroBroker" type="date" class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-card">
         </div>
         <p id="cbSaldo" class="col-span-2 text-xs text-slate-600"></p>
         <button type="button" onclick="saveCobro(false)" class="bg-white/10 hover:bg-white/15 text-slate-800 rounded-full px-3 py-2 text-sm font-medium">Guardar</button>
@@ -161,10 +170,10 @@
   <!-- SEGURO SIN DEFINIR -->
   <section class="bg-card rounded-xl card p-4">
     <div class="flex items-center justify-between gap-2 mb-2">
-      <h4 class="text-sm font-semibold text-slate-700">Seguro sin definir</h4>
+      <h4 class="text-sm font-semibold text-slate-700">Seguro por gestionar</h4>
       <span id="uninsuredCount" class="text-xs rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 whitespace-nowrap">0</span>
     </div>
-    <p class="text-xs text-slate-500 mb-3">SEGURO. vacío: indica si APLICA (con prima) o NO APLICA.</p>
+    <p class="text-xs text-slate-500 mb-3">Operaciones abiertas con SEGURO = SI (o sin definir) y SEGURO. aún no LISTO.</p>
     <ul id="listUninsured" class="space-y-2"></ul>
 
     <div id="insuranceCalculator" class="hidden mt-4 border border-sky-100 bg-sky-50/60 rounded-lg p-3">
@@ -193,7 +202,7 @@
           <input id="premiumResult" type="text" readonly class="w-full border border-slate-200 rounded-full px-3 py-2 text-sm bg-slate-100 font-semibold" value="$0.00">
           <p id="minApplied" class="hidden text-[11px] text-amber-700 mt-1">Se aplicó la prima mínima.</p>
         </div>
-        <button type="button" onclick="saveCalculatedInsurance()" class="col-span-2 bg-sky-600 hover:bg-sky-700 text-white rounded-full px-3 py-2 text-sm font-medium">APLICA · registrar prima</button>
+        <button type="button" onclick="saveCalculatedInsurance()" class="col-span-2 bg-sky-600 hover:bg-sky-700 text-white rounded-full px-3 py-2 text-sm font-medium">Seguro LISTO · registrar prima</button>
         <button type="button" onclick="confirmNoInsurance()" class="col-span-2 border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-full px-3 py-2 text-sm font-medium">NO APLICA seguro</button>
       </div>
       <p id="insuranceFeedback" class="text-xs mt-2 text-slate-600" aria-live="polite"></p>
@@ -265,7 +274,7 @@
             <th class="text-right px-4 py-2 font-medium">Lista p/ cobrar</th>
             <th class="text-right px-4 py-2 font-medium">Espera pago cliente</th>
             <th class="text-left px-4 py-2 font-medium min-w-[140px]">% cobrado</th>
-            <th class="text-right px-4 py-2 font-medium">Seguro s/definir</th>
+            <th class="text-right px-4 py-2 font-medium">Seguro por gestionar</th>
             <th class="text-right px-4 py-2 font-medium">Datos faltantes</th>
           </tr>
         </thead>
@@ -436,6 +445,10 @@
         <div class="rounded-lg bg-slate-50 p-4"><h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">RO por mes de cierre</h4><div id="cfMeses" class="flex items-end gap-1.5 h-32"></div></div>
       </div>
       <div>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Seguimiento semanal</h4>
+        <div id="cfSeguimiento" class="rounded-lg bg-slate-50 p-4"></div>
+      </div>
+      <div>
         <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Operaciones</h4>
         <div class="overflow-x-auto rounded-lg border border-slate-200">
           <table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500 text-xs uppercase"><tr>
@@ -536,38 +549,46 @@
 
 <script>
 // ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
-const STORAGE_KEY = 'crm_oportunidades_data_v3';
+const STORAGE_KEY = 'crm_oportunidades_data_v4';
 
 // Excel de alimentación: [clave interna, encabezado EXACTO en el Excel, tipo, nivel, alias aceptados al importar]
 //   nivel: 'obligatorio' = nunca vacío · 'importante' = importante pero no siempre tiene · '' = no importante
 const FEED_COLUMNS = [
-  ['broker',        'BROKER',                'text',   'importante',  ['Broker']],
-  ['comision',      'COMISION PROPIA',       'num',    'importante',  ['Comisión USD', 'Comision', 'Comisión propia']],
-  ['observacion',   'OBSERVACION',           'text',   '',            ['Observaciones', 'Observación']],
-  ['seguroAplica',  'SEGURO.',               'seguro', 'importante',  ['Seguro', 'Estado seguro']],
-  ['ro',            'RO',                    'text',   'obligatorio', []],
-  ['cierre',        'CIERRE',                'date',   'obligatorio', []],
-  ['validez',       'VALIDEZ',               'date',   '',            []],
-  ['servicio',      'SERVICIO',              'text',   'obligatorio', []],
-  ['consignatario', 'CONSIGNATARIO',         'text',   'obligatorio', []],
-  ['ref',           'REF CLIENTE/PROVEEDOR', 'text',   'obligatorio', ['Ref cliente', 'Ref']],
-  ['agente',        'AGENTE/COLOAD',         'text',   'obligatorio', []],
-  ['ruta',          'RUTA',                  'text',   'obligatorio', []],
-  ['etd',           'ETD',                   'date',   'obligatorio', []],
-  ['eta',           'ETA',                   'date',   'obligatorio', []],
-  ['cantidad',      'CANTIDAD',              'text',   '',            []],
-  ['naviera',       'NAVIERA',               'text',   '',            []],
+  ['seguroAplica',        'SEGURO',                'sino',     'importante',  []],                       // SI / NO: ¿aplica seguro?
+  ['broker',              'BROKER',                'text',     'importante',  ['Broker']],
+  ['comisionBrokerTexto', 'COMISION',              'text',     '',            ['Comisión broker']],      // texto original, p. ej. "USD 50 + IGV"
+  ['observacion',         'OBSERVACION',           'text',     '',            ['Observaciones', 'Observación']],
+  ['seguroEstado',        'SEGURO.',               'segEstado','importante',  ['Estado seguro']],         // LISTO / PENDIENTE / CANCELADO / NO APLICA
+  ['ro',                  'RO',                    'text',     'obligatorio', []],
+  ['cierre',              'CIERRE',                'date',     'obligatorio', []],
+  ['validez',             'VALIDEZ',               'date',     '',            []],
+  ['servicio',            'SERVICIO',              'text',     'obligatorio', []],
+  ['consignatario',       'CONSIGNATARIO',         'text',     'obligatorio', []],
+  ['ref',                 'REF CLIENTE/PROVEEDOR', 'text',     'obligatorio', ['Ref cliente', 'Ref']],
+  ['agente',              'AGENTE/COLOAD',         'text',     'obligatorio', []],
+  ['ruta',                'RUTA',                  'text',     'obligatorio', []],
+  ['etd',                 'ETD',                   'date',     'obligatorio', []],
+  ['eta',                 'ETA',                   'date',     'obligatorio', []],
+  ['cantidad',            'CANTIDAD',              'text',     '',            []],
+  ['naviera',             'NAVIERA',               'text',     '',            []],
+  ['profit',              'PROFIT',                'num',      '',            []],
+  ['comision',            'COMISION PROPIA',       'num',      'importante',  ['VANESSA', 'Comisión propia USD']],  // PROFIT × %
+  ['comisionPct',         '% COMISION',            'pct',      '',            ['Columna1', 'Porcentaje comisión']],
 ];
 // Columnas de gestión que agrega el CRM a la derecha (opcionales en el Excel de alimentación)
 const CRM_COLUMNS = [
-  ['estado',           'Estado',               'estado',    '', []],
-  ['prioridad',        'Prioridad',            'prioridad', '', []],
-  ['seguroPrima',      'Seguro prima USD',     'num',       '', []],
-  // Cobro de la comisión propia: se cobra DESPUÉS de que el cliente paga el servicio
-  ['fechaPagoCliente', 'Pago cliente',         'date',      '', ['Fecha pago cliente']],
-  ['cobrado',          'Comisión cobrada USD', 'num',       '', ['Cobrado USD', 'Cobrado']],
-  ['fechaCobro',       'Fecha cobro comisión', 'date',      '', ['Fecha cobro']],
-  ['alertas',          'Alertas',              'alertas',   '', []],
+  ['estado',            'Estado',                       'estado',    '', []],
+  ['prioridad',         'Prioridad',                    'prioridad', '', []],
+  ['seguroPrima',       'Seguro prima USD',             'num',       '', []],
+  ['comisionBroker',    'COMISION BROKER USD',          'num',       '', []],
+  ['comisionBrokerIgv', 'COMISION BROKER IGV',          'sino',      '', []],
+  // Las comisiones se cobran DESPUÉS de que el cliente paga el servicio
+  ['fechaPagoCliente',  'Pago cliente',                 'date',      '', ['Fecha pago cliente']],
+  ['cobrado',           'Comisión cobrada USD',         'num',       '', ['Cobrado USD', 'Cobrado']],
+  ['fechaCobro',        'Fecha cobro comisión',         'date',      '', ['Fecha cobro']],
+  ['cobradoBroker',     'Comisión broker cobrada USD',  'num',       '', []],
+  ['fechaCobroBroker',  'Fecha cobro broker',           'date',      '', []],
+  ['alertas',           'Alertas',                      'alertas',   '', []],
 ];
 const EXCEL_COLUMNS = [...FEED_COLUMNS, ...CRM_COLUMNS];
 const LABELS = Object.fromEntries(EXCEL_COLUMNS.map(c => [c[0], c[1]]));
@@ -576,33 +597,33 @@ const IMPORTANT_KEYS = FEED_COLUMNS.filter(c => c[3] === 'importante').map(c => 
 
 // Datos de ejemplo (referidos a fines de nov-2026)
 const SAMPLE_DATA = [
-  { broker:'ABC Brokers', comision:600, observacion:'', seguroAplica:'APLICA', ro:'2026-099', cierre:'25/08/2026', validez:'05/09/2026', servicio:'FCL', consignatario:'Importadora Lima', ref:'IL-4410', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'20/08/2026', eta:'25/09/2026', cantidad:'1x40HC', naviera:'COSCO',
+  { broker:'ABC Brokers', comision:600, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-099', cierre:'25/08/2026', validez:'05/09/2026', servicio:'FCL', consignatario:'Importadora Lima', ref:'IL-4410', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'20/08/2026', eta:'25/09/2026', cantidad:'1x40HC', naviera:'COSCO',
     estado:'CERRADA', prioridad:false, seguroPrima:150, fechaPagoCliente:'30/09/2026', cobrado:300, fechaCobro:'15/10/2026', alertas:[] },
-  { broker:'XYZ Corp', comision:780, observacion:'Cliente pagó, falta cobrar', seguroAplica:'APLICA', ro:'2026-100', cierre:'20/08/2026', validez:'31/08/2026', servicio:'FCL', consignatario:'Electro Andes', ref:'EA-2210', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'28/08/2026', eta:'01/10/2026', cantidad:'2x40HC', naviera:'ONE',
+  { broker:'XYZ Corp', comision:780, observacion:'Cliente pagó, falta cobrar', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-100', cierre:'20/08/2026', validez:'31/08/2026', servicio:'FCL', consignatario:'Electro Andes', ref:'EA-2210', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'28/08/2026', eta:'01/10/2026', cantidad:'2x40HC', naviera:'ONE',
     estado:'CERRADA', prioridad:true, seguroPrima:240, fechaPagoCliente:'03/10/2026', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'ABC Brokers', comision:850, observacion:'Cliente frecuente', seguroAplica:'APLICA', ro:'2026-101', cierre:'05/09/2026', validez:'20/09/2026', servicio:'FCL', consignatario:'ACME SAC', ref:'ACME-PO-7781', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'28/09/2026', eta:'02/11/2026', cantidad:'2x40HC', naviera:'Maersk',
+  { broker:'ABC Brokers', comision:850, comisionBroker:100, comisionBrokerIgv:'SI', comisionBrokerTexto:'USD 100 + IGV', observacion:'Cliente frecuente', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-101', cierre:'05/09/2026', validez:'20/09/2026', servicio:'FCL', consignatario:'ACME SAC', ref:'ACME-PO-7781', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'28/09/2026', eta:'02/11/2026', cantidad:'2x40HC', naviera:'Maersk',
     estado:'CERRADA', prioridad:false, seguroPrima:210, fechaPagoCliente:'06/11/2026', cobrado:850, fechaCobro:'15/11/2026', alertas:[] },
-  { broker:'XYZ Corp', comision:320, observacion:'', seguroAplica:'NO APLICA', ro:'2026-102', cierre:'18/09/2026', validez:'30/09/2026', servicio:'LCL', consignatario:'Global Trade Perú', ref:'GTP-088', agente:'Rotterdam Coload', ruta:'RTM→CAL', etd:'08/10/2026', eta:'14/11/2026', cantidad:'6 CBM', naviera:'MSC',
+  { broker:'XYZ Corp', comision:320, observacion:'', seguroAplica:'NO', seguroEstado:'NO APLICA', ro:'2026-102', cierre:'18/09/2026', validez:'30/09/2026', servicio:'LCL', consignatario:'Global Trade Perú', ref:'GTP-088', agente:'Rotterdam Coload', ruta:'RTM→CAL', etd:'08/10/2026', eta:'14/11/2026', cantidad:'6 CBM', naviera:'MSC',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'20/11/2026', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'', comision:0, observacion:'Broker por definir', seguroAplica:'', ro:'2026-103', cierre:'29/09/2026', validez:'15/10/2026', servicio:'FCL', consignatario:'Import del Sur', ref:'IDS-2201', agente:'Hansa Agent GmbH', ruta:'HAM→CAL', etd:'20/10/2026', eta:'28/11/2026', cantidad:'1x20GP', naviera:'Hapag',
+  { broker:'', comision:0, observacion:'Broker por definir', seguroAplica:'SI', seguroEstado:'PENDIENTE', ro:'2026-103', cierre:'29/09/2026', validez:'15/10/2026', servicio:'FCL', consignatario:'Import del Sur', ref:'IDS-2201', agente:'Hansa Agent GmbH', ruta:'HAM→CAL', etd:'20/10/2026', eta:'28/11/2026', cantidad:'1x20GP', naviera:'Hapag',
     estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +2 días'] },
-  { broker:'Global Log', comision:140, observacion:'', seguroAplica:'APLICA', ro:'2026-104', cierre:'03/10/2026', validez:'18/10/2026', servicio:'Aéreo', consignatario:'Comercial Andina', ref:'AND-014', agente:'Miami Air Agent', ruta:'MIA→LIM', etd:'24/11/2026', eta:'25/11/2026', cantidad:'320 kg', naviera:'LATAM',
+  { broker:'Global Log', comision:140, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-104', cierre:'03/10/2026', validez:'18/10/2026', servicio:'Aéreo', consignatario:'Comercial Andina', ref:'AND-014', agente:'Miami Air Agent', ruta:'MIA→LIM', etd:'24/11/2026', eta:'25/11/2026', cantidad:'320 kg', naviera:'LATAM',
     estado:'ABIERTA', prioridad:false, seguroPrima:45, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'XYZ Corp', comision:410, observacion:'', seguroAplica:'APLICA', ro:'2026-105', cierre:'14/10/2026', validez:'30/10/2026', servicio:'FCL', consignatario:'Distribuidora XYZ', ref:'DXYZ-032', agente:'BUE Coload', ruta:'BUE→CAL', etd:'20/10/2026', eta:'10/11/2026', cantidad:'1x40HC', naviera:'Hapag',
+  { broker:'XYZ Corp', comision:410, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-105', cierre:'14/10/2026', validez:'30/10/2026', servicio:'FCL', consignatario:'Distribuidora XYZ', ref:'DXYZ-032', agente:'BUE Coload', ruta:'BUE→CAL', etd:'20/10/2026', eta:'10/11/2026', cantidad:'1x40HC', naviera:'Hapag',
     estado:'ABIERTA', prioridad:true, seguroPrima:180, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'Global Log', comision:260, observacion:'Pendiente confirmar seguro', seguroAplica:'', ro:'2026-106', cierre:'22/10/2026', validez:'05/11/2026', servicio:'LCL', consignatario:'Textiles Unidos', ref:'TXT-076', agente:'', ruta:'VLC→CAL', etd:'15/11/2026', eta:'20/12/2026', cantidad:'3 CBM', naviera:'ONE',
+  { broker:'Global Log', comision:260, observacion:'Pendiente confirmar seguro', seguroAplica:'SI', seguroEstado:'PENDIENTE', ro:'2026-106', cierre:'22/10/2026', validez:'05/11/2026', servicio:'LCL', consignatario:'Textiles Unidos', ref:'TXT-076', agente:'', ruta:'VLC→CAL', etd:'15/11/2026', eta:'20/12/2026', cantidad:'3 CBM', naviera:'ONE',
     estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +3 días'] },
-  { broker:'ABC Brokers', comision:920, observacion:'', seguroAplica:'APLICA', ro:'2026-107', cierre:'30/10/2026', validez:'15/11/2026', servicio:'FCL', consignatario:'Agroexport S.A.', ref:'AGRO-045', agente:'Qingdao Partner', ruta:'CAL→QIN', etd:'01/12/2026', eta:'05/01/2027', cantidad:'4x40RF', naviera:'Maersk',
+  { broker:'ABC Brokers', comision:920, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-107', cierre:'30/10/2026', validez:'15/11/2026', servicio:'FCL', consignatario:'Agroexport S.A.', ref:'AGRO-045', agente:'Qingdao Partner', ruta:'CAL→QIN', etd:'01/12/2026', eta:'05/01/2027', cantidad:'4x40RF', naviera:'Maersk',
     estado:'ABIERTA', prioridad:false, seguroPrima:280, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'XYZ Corp', comision:1100, observacion:'Carga proyecto', seguroAplica:'APLICA', ro:'2026-108', cierre:'04/11/2026', validez:'20/11/2026', servicio:'FCL', consignatario:'Minera del Norte', ref:'MIN-051', agente:'Busan Agent', ruta:'BUS→CAL', etd:'18/11/2026', eta:'29/12/2026', cantidad:'3x40OT', naviera:'MSC',
+  { broker:'XYZ Corp', comision:1100, comisionBroker:200, comisionBrokerTexto:'USD 200', observacion:'Carga proyecto', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-108', cierre:'04/11/2026', validez:'20/11/2026', servicio:'FCL', consignatario:'Minera del Norte', ref:'MIN-051', agente:'Busan Agent', ruta:'BUS→CAL', etd:'18/11/2026', eta:'29/12/2026', cantidad:'3x40OT', naviera:'MSC',
     estado:'ABIERTA', prioridad:true, seguroPrima:390, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'', comision:0, observacion:'', seguroAplica:'NO APLICA', ro:'2026-109', cierre:'10/11/2026', validez:'28/11/2026', servicio:'Aéreo', consignatario:'Farma Lima SAC', ref:'FL-3302', agente:'Frankfurt Air', ruta:'FRA→LIM', etd:'02/12/2026', eta:'04/12/2026', cantidad:'150 kg', naviera:'Lufthansa Cargo',
+  { broker:'', comision:0, observacion:'', seguroAplica:'NO', seguroEstado:'NO APLICA', ro:'2026-109', cierre:'10/11/2026', validez:'28/11/2026', servicio:'Aéreo', consignatario:'Farma Lima SAC', ref:'FL-3302', agente:'Frankfurt Air', ruta:'FRA→LIM', etd:'02/12/2026', eta:'04/12/2026', cantidad:'150 kg', naviera:'Lufthansa Cargo',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'ABC Brokers', comision:530, observacion:'', seguroAplica:'APLICA', ro:'2026-110', cierre:'17/11/2026', validez:'27/11/2026', servicio:'FCL', consignatario:'Ferretería Central', ref:'', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'10/12/2026', eta:'15/01/2027', cantidad:'1x40HC', naviera:'COSCO',
+  { broker:'ABC Brokers', comision:530, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-110', cierre:'17/11/2026', validez:'27/11/2026', servicio:'FCL', consignatario:'Ferretería Central', ref:'', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'10/12/2026', eta:'15/01/2027', cantidad:'1x40HC', naviera:'COSCO',
     estado:'ABIERTA', prioridad:false, seguroPrima:150, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'Global Log', comision:300, observacion:'', seguroAplica:'', ro:'2026-111', cierre:'21/11/2026', validez:'05/12/2026', servicio:'LCL', consignatario:'Retail Perú', ref:'RP-9921', agente:'Miami Coload', ruta:'MIA→CAL', etd:'08/12/2026', eta:'18/12/2026', cantidad:'4 CBM', naviera:'CMA CGM',
+  { broker:'Global Log', comision:300, observacion:'', seguroAplica:'SI', seguroEstado:'PENDIENTE', ro:'2026-111', cierre:'21/11/2026', validez:'05/12/2026', servicio:'LCL', consignatario:'Retail Perú', ref:'RP-9921', agente:'Miami Coload', ruta:'MIA→CAL', etd:'08/12/2026', eta:'18/12/2026', cantidad:'4 CBM', naviera:'CMA CGM',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'XYZ Corp', comision:0, observacion:'Comisión por negociar', seguroAplica:'APLICA', ro:'2026-112', cierre:'25/11/2026', validez:'10/12/2026', servicio:'FCL', consignatario:'Pesquera Pacífico', ref:'PP-118', agente:'Shanghai Partner', ruta:'CAL→SHA', etd:'15/12/2026', eta:'22/01/2027', cantidad:'2x40RF', naviera:'Maersk',
+  { broker:'XYZ Corp', comision:0, observacion:'Comisión por negociar', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-112', cierre:'25/11/2026', validez:'10/12/2026', servicio:'FCL', consignatario:'Pesquera Pacífico', ref:'PP-118', agente:'Shanghai Partner', ruta:'CAL→SHA', etd:'15/12/2026', eta:'22/01/2027', cantidad:'2x40RF', naviera:'Maersk',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
 ];
 
@@ -645,21 +666,41 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 function mesCierre(r) { const d = parseDate(r.cierre); return d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}` : ''; }
 function mesLabel(k) { if (!k) return 'Sin fecha de cierre'; const [y, m] = k.split('-'); return `${MESES[Number(m) - 1]} ${y}`; }
 
-// ---- Cobro de la comisión propia: se cobra cuando el cliente ya pagó el servicio ----
+// ---- Comisión del broker escrita como texto: "USD 50 + IGV", "150 EUROS A USD 175.50" ----
+function parseComisionTexto(t) {
+  const s = String(t || '');
+  const m = s.match(/USD\s*([\d.,]+)/i) || s.match(/(\d+(?:[.,]\d+)?)/);
+  const monto = m ? Number(m[1].replace(/,(?=\d{3}\b)/g, '').replace(',', '.')) || 0 : 0;
+  return { monto, igv: /\+\s*IGV/i.test(s) };
+}
+
+// ---- Seguro: SEGURO (SI/NO) + SEGURO. (estado) ----
+const SEGURO_ESTADOS = ['LISTO', 'PENDIENTE', 'CANCELADO', 'NO APLICA'];
+function seguroLabel(r) { return r.seguroEstado || (r.seguroAplica === 'NO' ? 'NO APLICA' : r.seguroAplica === 'SI' ? 'PENDIENTE' : ''); }
+function seguroPendiente(r) {   // hay que gestionarlo: aplica (o no se sabe) y no está listo, cancelado ni marcado como no aplica
+  return r.estado === 'ABIERTA' && r.seguroAplica !== 'NO' && !['LISTO', 'CANCELADO', 'NO APLICA'].includes(r.seguroEstado);
+}
+
+// ---- Cobro de comisiones (propia + broker): se cobran cuando el cliente ya pagó el servicio ----
 function cobroInfo(r) {
-  const com = Number(r.comision) || 0, cob = Number(r.cobrado) || 0;
-  const saldo = Math.max(0, Math.round((com - cob) * 100) / 100);
+  const cp = Number(r.comision) || 0, cb = Number(r.comisionBroker) || 0;
+  const cobP = Number(r.cobrado) || 0, cobB = Number(r.cobradoBroker) || 0;
+  const redondo = n => Math.round(n * 100) / 100;
+  const propia = { com: cp, cob: cobP, saldo: redondo(Math.max(0, cp - cobP)) };
+  const broker = { com: cb, cob: cobB, saldo: redondo(Math.max(0, cb - cobB)), igv: r.comisionBrokerIgv === 'SI' };
+  const com = redondo(cp + cb), cob = redondo(cobP + cobB);
+  const saldo = redondo(propia.saldo + broker.saldo);
   const pago = parseDate(r.fechaPagoCliente);
   let estado;
   if (com <= 0) estado = 'SIN COMISIÓN';
-  else if (cob >= com) estado = 'COBRADA';
+  else if (saldo <= 0) estado = 'COBRADA';
   else if (cob > 0) estado = 'PARCIAL';
   else if (pago) estado = 'LISTA PARA COBRAR';
   else estado = 'ESPERA PAGO CLIENTE';
   const diasDesdePago = pago && saldo > 0 ? Math.max(0, diasDesde(r.fechaPagoCliente)) : 0;   // urgencia del cobro
   const dEta = diasDesde(r.eta);
   const diasSinPago = !pago && com > 0 && dEta !== null && dEta > 0 ? dEta : 0;                 // carga arribó y el cliente aún no paga
-  return { com, cob, saldo, estado, pago, diasDesdePago, diasSinPago, cobrable: !!pago && saldo > 0 };
+  return { com, cob, saldo, estado, pago, diasDesdePago, diasSinPago, cobrable: !!pago && saldo > 0, propia, broker };
 }
 
 // ---- Etapa de la operación (solo ETD / ETA + cobro) ----
@@ -681,6 +722,7 @@ function etapa(r) {
 
 // ---- Calidad de datos y semáforo (calculado, no se guarda) ----
 function faltantes(r) {
+  if (r.estado && r.estado !== 'ABIERTA') return { obligatorios: [], importantes: [] };
   return {
     obligatorios: REQUIRED_KEYS.filter(k => isBlank(r[k])),
     importantes: IMPORTANT_KEYS.filter(k => k === 'comision' ? !(Number(r.comision) > 0) : isBlank(r[k])),
@@ -702,12 +744,16 @@ function esFilaDeNotas(raw) {
   return vals.filter(v => /importa|nunca|vac[ií]o|aplica\s+no\s+aplica/i.test(v)).length >= 2;
 }
 
+// Clave exacta (respeta el punto final de "SEGURO." para no confundirlo con "SEGURO")
+const exactKey = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
 function rowsFromSheet(json) {
   return json.filter(raw => !esFilaDeNotas(raw)).map(raw => {
-    const byKey = {};
-    Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const byExact = {}, byKey = {};
+    Object.keys(raw).forEach(k => { byExact[exactKey(k)] = raw[k]; if (!(normKey(k) in byKey)) byKey[normKey(k)] = raw[k]; });
     const get = (key, header, aliases) => {
-      for (const k of [header, ...aliases, key].map(normKey)) if (k in byKey) return byKey[k];
+      for (const k of [header, ...aliases].map(exactKey)) if (k in byExact) return byExact[k];
+      if (header.endsWith('.')) return '';   // "SEGURO." solo por nombre exacto
+      for (const k of [header, ...aliases, key].map(normKey)) if (k in byKey && !Object.keys(byExact).some(e => e.endsWith('.') && normKey(e) === k)) return byKey[k];
       return '';
     };
     const r = { alertas: [] };
@@ -719,12 +765,20 @@ function rowsFromSheet(json) {
         case 'date': val = normDate(v); break;
         case 'prioridad': val = /^(si|sí|alta|true|1|x)$/i.test(String(v).trim()); break;
         case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
-        case 'seguro': { const s = normKey(v); val = /^(noaplica|no|na|nocontratado)$/.test(s) ? 'NO APLICA' : /^(aplica|si|contratado)$/.test(s) ? 'APLICA' : ''; break; }
+        case 'sino': { const s = normKey(v); val = /^(si|s|aplica|true|1|x)$/.test(s) ? 'SI' : /^(no|n|noaplica|false|0)$/.test(s) ? 'NO' : ''; break; }
+        case 'segEstado': { const s = exactKey(v); val = SEGURO_ESTADOS.includes(s) ? s : s === 'APLICA' ? 'PENDIENTE' : ''; break; }
+        case 'pct': { const n = Number(String(v).replace('%', '').trim()); val = Number.isFinite(n) && String(v).trim() !== '' ? (n > 1 ? n / 100 : n) : ''; break; }
         case 'alertas': val = String(v || '').replace(/[<>]/g, '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
         default: val = String(v ?? '').replace(/[<>]/g, '').trim();
       }
       r[key] = val;
     });
+    // Comisión del broker: si no viene el monto, se toma del texto "USD 50 + IGV"
+    if (!(Number(r.comisionBroker) > 0) && r.comisionBrokerTexto) {
+      const c = parseComisionTexto(r.comisionBrokerTexto);
+      r.comisionBroker = c.monto;
+      if (!r.comisionBrokerIgv) r.comisionBrokerIgv = c.igv ? 'SI' : 'NO';
+    }
     return r;
   }).filter(r => r.ro);
 }
@@ -745,18 +799,28 @@ function rowsToSheet(data) {
 async function importExcelFile(file) {
   if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
   const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-  const name = wb.SheetNames.find(n => normKey(n) === 'oportunidades') || wb.SheetNames[0];
-  const rows = rowsFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true }));
+  const name = wb.SheetNames.find(n => ['oportunidades', 'bd', 'base'].includes(normKey(n))) || wb.SheetNames[0];
+  const rows = rowsFromSheet(sheetRowsWithHeader(wb.Sheets[name], ['RO', 'CIERRE']));
   if (!rows.length) throw new Error('No se encontraron filas con RO en la hoja "' + name + '".');
-  const cli = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes');
-  rows.clientes = cli ? clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[cli], { defval: '', raw: false })) : null;
+  const cli = wb.SheetNames.find(n => ['clientes', 'bdclientes', 'clientesasig'].includes(normKey(n)));
+  rows.clientes = cli ? clientesFromSheet(sheetRowsWithHeader(wb.Sheets[cli], ['EMPRESA'])) : null;
+  const tas = wb.SheetNames.find(n => normKey(n) === 'tasasseguro');
+  rows.tasas = tas ? tasasFromSheet(sheetRowsWithHeader(wb.Sheets[tas], ['EMPRESA'])) : null;
   return rows;
+}
+// Lee una hoja buscando la fila de encabezados (la primera de las 10 primeras que contiene todas las columnas clave)
+function sheetRowsWithHeader(ws, claves) {
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+  let h = aoa.findIndex((row, i) => i < 10 && claves.every(c => row.some(v => exactKey(v) === c)));
+  if (h < 0) h = 0;
+  const heads = aoa[h].map((v, i) => String(v).trim() || `__col${i}`);
+  return aoa.slice(h + 1).map(row => Object.fromEntries(heads.map((k, i) => [k, row[i] === undefined ? '' : row[i]])));
 }
 async function importClientesFile(file) {
   if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
   const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-  const name = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes') || wb.SheetNames[0];
-  const list = clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false }));
+  const name = wb.SheetNames.find(n => ['clientes', 'bdclientes', 'clientesasig'].includes(normKey(n))) || wb.SheetNames[0];
+  const list = clientesFromSheet(sheetRowsWithHeader(wb.Sheets[name], ['EMPRESA']));
   if (!list.length) throw new Error('No se encontraron filas con EMPRESA en la hoja "' + name + '".');
   return list;
 }
@@ -769,7 +833,10 @@ function downloadExcel(data, filename) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Oportunidades');
   if (typeof CLIENTES !== 'undefined' && CLIENTES.length) {
-    const wc = XLSX.utils.json_to_sheet(clientesToSheet(CLIENTES), { header: CLIENT_COLUMNS.map(c => c[1]) });
+    const semanas = [...new Set(CLIENTES.flatMap(c => (c.seguimiento || []).map(x => x.semana)))].sort((a, b) => a - b);
+    const filas = CLIENTES.map(c => ({ ...Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])),
+      ...Object.fromEntries(semanas.map(n => ['SEMANA ' + n, ((c.seguimiento || []).find(x => x.semana === n) || {}).nota || ''])) }));
+    const wc = XLSX.utils.json_to_sheet(filas, { header: [...CLIENT_COLUMNS.map(c => c[1]), ...semanas.map(n => 'SEMANA ' + n)] });
     wc['!cols'] = CLIENT_COLUMNS.map(() => ({ wch: 22 }));
     XLSX.utils.book_append_sheet(wb, wc, 'Clientes');
   }
@@ -786,17 +853,19 @@ const CLIENT_COLUMNS = [
   ['correo',    'CORREO',    false, ['Email', 'E-mail', 'Mail']],
   ['direccion', 'DIRECCION', false, ['Dirección']],
   ['distrito',  'DISTRITO',  false, []],
-  ['semana',    'SEMANA',    false, []],   // también acepta encabezados como "SEMANA 35"
+  ['estado',    'ESTADO',    false, []],     // vacío = activo; p. ej. EN LIQUIDACION, BAJA DEFINITIVA
 ];
+// Seguimiento: en el Excel, una columna por semana ("SEMANA 35", "SEMANA 36"...) con la nota de la gestión
+const ESTADO_CLIENTE_RE = /(EN LIQUIDACION|BAJA DEFINITIVA|BAJA DE OFICIO|NO HABIDO|SUSPENSION|SUSPENDID|CERRAD|INACTIV)/i;
 const SAMPLE_CLIENTES = [
-  { empresa:'ACME SAC', contacto:'Carla Ríos', celular:'987654321', correo:'compras@acme.pe', direccion:'Av. Argentina 1450', distrito:'Callao', semana:'35' },
-  { empresa:'Global Trade Perú', contacto:'Jorge Paredes', celular:'991234567', correo:'jparedes@globaltrade.pe', direccion:'Jr. Huallaga 320', distrito:'Cercado de Lima', semana:'35' },
-  { empresa:'Import del Sur', contacto:'Lucía Medina', celular:'956789012', correo:'lmedina@importsur.pe', direccion:'Av. Colonial 2100', distrito:'Lima', semana:'36' },
-  { empresa:'Comercial Andina', contacto:'Pedro Salas', celular:'944556677', correo:'psalas@andina.com.pe', direccion:'Calle Los Pinos 145', distrito:'San Isidro', semana:'36' },
-  { empresa:'Agroexport S.A.', contacto:'María Torres', celular:'933221100', correo:'mtorres@agroexport.pe', direccion:'Panamericana Sur km 32', distrito:'Lurín', semana:'37' },
-  { empresa:'Minera del Norte', contacto:'Ricardo Vega', celular:'922113344', correo:'logistica@mineranorte.pe', direccion:'Av. Javier Prado Este 4200', distrito:'Surco', semana:'37' },
-  { empresa:'Farma Lima SAC', contacto:'Ana Quispe', celular:'911002233', correo:'aquispe@farmalima.pe', direccion:'Av. La Marina 980', distrito:'San Miguel', semana:'' },
-  { empresa:'Retail Perú', contacto:'', celular:'', correo:'importaciones@retailperu.pe', direccion:'Av. Benavides 1555', distrito:'Miraflores', semana:'38' },
+  { empresa:'ACME SAC', contacto:'Carla Ríos', celular:'987654321', correo:'compras@acme.pe', direccion:'Av. Argentina 1450', distrito:'Callao', estado:'', seguimiento:[{ semana:46, nota:'Cotización enviada para 2x40HC Shanghai.' }, { semana:47, nota:'Confirmó booking; pide seguro.' }] },
+  { empresa:'Global Trade Perú', contacto:'Jorge Paredes', celular:'991234567', correo:'jparedes@globaltrade.pe', direccion:'Jr. Huallaga 320', distrito:'Cercado de Lima', estado:'', seguimiento:[{ semana:47, nota:'Llamada de seguimiento: pagará la factura esta semana.' }] },
+  { empresa:'Import del Sur', contacto:'Lucía Medina', celular:'956789012', correo:'lmedina@importsur.pe', direccion:'Av. Colonial 2100', distrito:'Lima', estado:'', seguimiento:[] },
+  { empresa:'Comercial Andina', contacto:'Pedro Salas', celular:'944556677', correo:'psalas@andina.com.pe', direccion:'Calle Los Pinos 145', distrito:'San Isidro', estado:'', seguimiento:[] },
+  { empresa:'Agroexport S.A.', contacto:'María Torres', celular:'933221100', correo:'mtorres@agroexport.pe', direccion:'Panamericana Sur km 32', distrito:'Lurín', estado:'', seguimiento:[{ semana:45, nota:'Interesada en reefer a Qingdao.' }] },
+  { empresa:'Minera del Norte', contacto:'Ricardo Vega', celular:'922113344', correo:'logistica@mineranorte.pe', direccion:'Av. Javier Prado Este 4200', distrito:'Surco', estado:'', seguimiento:[] },
+  { empresa:'Farma Lima SAC', contacto:'Ana Quispe', celular:'911002233', correo:'aquispe@farmalima.pe', direccion:'Av. La Marina 980', distrito:'San Miguel', estado:'', seguimiento:[] },
+  { empresa:'Retail Perú', contacto:'', celular:'', correo:'importaciones@retailperu.pe', direccion:'Av. Benavides 1555', distrito:'Miraflores', estado:'BAJA DEFINITIVA', seguimiento:[] },
 ];
 function loadClientes() {
   try { const s = localStorage.getItem(CLIENTES_KEY); if (s) { const d = JSON.parse(s); if (Array.isArray(d)) return d; } } catch (e) {}
@@ -811,14 +880,36 @@ function clientesFromSheet(json) {
     CLIENT_COLUMNS.forEach(([key, header, , aliases]) => {
       let v = '';
       for (const k of [header, ...aliases].map(normKey)) if (k in byKey) { v = byKey[k]; break; }
-      if (key === 'semana' && v === '') { const k = Object.keys(byKey).find(k => k.startsWith('semana')); if (k) v = byKey[k]; }
-      c[key] = String(v ?? '').replace(/[<>]/g, '').trim();
+      c[key] = String(v ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
     });
+    // El estado puede venir escrito en CONTACTO ("EN LIQUIDACION", "BAJA DEFINITIVA")
+    if (!c.estado && ESTADO_CLIENTE_RE.test(c.contacto)) { c.estado = c.contacto.toUpperCase(); c.contacto = ''; }
+    // Seguimiento: columnas "SEMANA nn" o columna SEGUIMIENTO (JSON)
+    c.seguimiento = [];
+    Object.keys(raw).forEach(k => {
+      const m = String(k).match(/^\s*semana\s*(\d{1,2})\s*$/i);
+      const nota = String(raw[k] ?? '').replace(/[<>]/g, '').trim();
+      if (m && nota) c.seguimiento.push({ semana: Number(m[1]), nota });
+    });
+    const js = raw.SEGUIMIENTO || raw.seguimiento;
+    if (js) { try { const arr = typeof js === 'string' ? JSON.parse(js) : js; if (Array.isArray(arr)) c.seguimiento = arr.filter(x => x && x.nota).map(x => ({ semana: Number(x.semana) || 0, nota: String(x.nota).replace(/[<>]/g, '') })); } catch (e) {} }
+    c.seguimiento.sort((a, b) => a.semana - b.semana);
     return c;
   }).filter(c => c.empresa);
 }
 function clientesToSheet(list) {
-  return list.map(c => Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])));
+  return list.map(c => ({ ...Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])), SEGUIMIENTO: JSON.stringify(c.seguimiento || []) }));
+}
+// Tasas de seguro por cliente (hoja "Tasas seguro": EMPRESA, PORCENTAJE; fila MINIMO opcional)
+function tasasFromSheet(json) {
+  const out = { minimo: null, tasas: {} };
+  json.forEach(raw => {
+    const byKey = {}; Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const emp = String(byKey.empresa || '').trim(), pct = Number(String(byKey.porcentaje ?? '').replace('%', ''));
+    if (!emp || !Number.isFinite(pct)) return;
+    if (/^m[ií]nimo/i.test(emp)) out.minimo = pct; else out.tasas[emp] = pct > 0.5 ? pct / 100 : pct;
+  });
+  return out;
 }
 const empresaKey = s => normKey(s).replace(/(sac|saa|sa|srl|eirl|sociedadanonima)$/,'');
 
@@ -988,7 +1079,9 @@ const COBRO_BADGE = {
   'COBRADA':'bg-emerald-100 text-emerald-700', 'PARCIAL':'bg-amber-100 text-amber-800', 'LISTA PARA COBRAR':'bg-amber-100 text-amber-800',
   'ESPERA PAGO CLIENTE':'bg-violet-100 text-violet-700', 'SIN COMISIÓN':'bg-slate-100 text-slate-500'
 };
-const SEGURO_BADGE = { 'APLICA':'bg-sky-100 text-sky-700', 'NO APLICA':'bg-slate-100 text-slate-600' };
+const SEGURO_BADGE = { 'LISTO':'bg-emerald-100 text-emerald-700', 'PENDIENTE':'bg-red-100 text-red-700', 'CANCELADO':'bg-slate-100 text-slate-500', 'NO APLICA':'bg-slate-100 text-slate-500' };
+const segBadge = r => { const l = seguroLabel(r); return l ? `<span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${SEGURO_BADGE[l] || 'bg-slate-100 text-slate-600'}">${l}</span>` : cellVal(r, 'seguroEstado'); };
+const comTotal = r => cobroInfo(r).com;
 const ESTADO_BADGE = {
   ABIERTA:'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300',
   CERRADA:'bg-slate-100 text-slate-600 ring-1 ring-slate-300',
@@ -1001,8 +1094,9 @@ function groupBy(arr, f) { const m = new Map(); arr.forEach(x => { const k = f(x
 const VACIO = '(vacío)';
 function cellVal(r, key) {
   const v = r[key];
-  if (REQUIRED_KEYS.includes(key) && isBlank(v)) return '<span class="text-[11px] rounded bg-red-50 text-red-600 px-1.5 py-0.5 font-medium">Falta</span>';
-  if (IMPORTANT_KEYS.includes(key) && (key === 'comision' ? !(Number(v) > 0) : isBlank(v))) return '<span class="text-[11px] rounded bg-amber-50 text-amber-700 px-1.5 py-0.5">Sin dato</span>';
+  const abierta = !r.estado || r.estado === 'ABIERTA';
+  if (abierta && REQUIRED_KEYS.includes(key) && isBlank(v)) return '<span class="text-[11px] rounded bg-red-50 text-red-600 px-1.5 py-0.5 font-medium">Falta</span>';
+  if (abierta && IMPORTANT_KEYS.includes(key) && (key === 'comision' ? !(Number(v) > 0) : isBlank(v))) return '<span class="text-[11px] rounded bg-amber-50 text-amber-700 px-1.5 py-0.5">Sin dato</span>';
   return esc(v);
 }
 
@@ -1019,9 +1113,10 @@ const TABLE_COLS = [
   { key:'etd',           label:'ETD',           filter:'text', ph:'dd/mm' },
   { key:'eta',           label:'ETA',           filter:'text', ph:'dd/mm' },
   { key:'broker',        label:'Broker',        filter:'select' },
-  { key:'comision',      label:'Comisión',      filter:'select', align:'right', value: r => Number(r.comision) > 0 ? 'Con comisión' : 'Sin comisión' },
+  { key:'comision',      label:'Comisión',      filter:'select', align:'right', value: r => comTotal(r) > 0 ? 'Con comisión' : 'Sin comisión' },
   { key:'cobro',         label:'Cobro',         filter:'select', value: r => cobroInfo(r).estado },
-  { key:'seguroAplica',  label:'Seguro',        filter:'select' },
+  { key:'seguroEstado',  label:'Seguro',        filter:'select', value: r => seguroLabel(r) || VACIO },
+  { key:'estado',        label:'Estado',        filter:'select' },
   { key:'prioridad',     label:'Prioridad',     filter:'select', align:'center', value: r => r.prioridad ? 'Alta' : 'Normal' },
   { key:'sem',           label:'🚦',            filter:'select', align:'center', value: r => calcSem(r), optLabel: k => ({ verde:'En orden', ambar:'Atención', rojo:'Crítico' }[k] || k) },
 ];
@@ -1097,7 +1192,9 @@ const fillSelects = refreshFilterOptions;
 function rowHtml(r) {
   const c = cobroInfo(r), sem = calcSem(r);
   const cobroCell = `<span class="text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${COBRO_BADGE[c.estado]}">${c.estado === 'LISTA PARA COBRAR' ? `Lista · ${c.diasDesdePago} d` : c.estado === 'PARCIAL' ? `Parcial · saldo ${fmt$(c.saldo)}` : c.estado === 'ESPERA PAGO CLIENTE' && c.diasSinPago ? `Espera pago · ${c.diasSinPago} d` : c.estado.charAt(0) + c.estado.slice(1).toLowerCase()}</span>`;
-  const seg = r.seguroAplica ? `<span class="text-[11px] rounded px-1.5 py-0.5 ${SEGURO_BADGE[r.seguroAplica]}">${r.seguroAplica}</span>` : cellVal(r, 'seguroAplica');
+  const seg = segBadge(r);
+  const est = `<span class="text-[11px] rounded px-1.5 py-0.5 ${r.estado === 'ABIERTA' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${esc(r.estado || '')}</span>`;
+  const comCell = c.com > 0 ? `${fmt$(c.com)}${c.broker.com > 0 ? `<div class="text-[10px] font-normal text-slate-500">propia ${fmt$(c.propia.com)} · broker ${fmt$(c.broker.com)}${c.broker.igv ? '+IGV' : ''}</div>` : ''}` : cellVal(r, 'comision');
   return `<tr class="row-hover" data-ro="${esc(r.ro)}" onclick="openModal(this.dataset.ro)">
     <td class="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">${cellVal(r, 'ro')}</td>
     <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'cierre')}</td>
@@ -1110,9 +1207,10 @@ function rowHtml(r) {
     <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'etd')}</td>
     <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${cellVal(r, 'eta')}</td>
     <td class="px-3 py-2 text-slate-600">${cellVal(r, 'broker')}</td>
-    <td class="px-3 py-2 text-right font-medium text-slate-700 whitespace-nowrap">${Number(r.comision) > 0 ? fmt$(r.comision) : cellVal(r, 'comision')}</td>
+    <td class="px-3 py-2 text-right font-medium text-slate-700 whitespace-nowrap">${comCell}</td>
     <td class="px-3 py-2">${cobroCell}</td>
     <td class="px-3 py-2">${seg}</td>
+    <td class="px-3 py-2">${est}</td>
     <td class="px-3 py-2 text-center">
       <label class="inline-flex items-center gap-1.5 cursor-pointer" onclick="event.stopPropagation()">
         <input type="checkbox" ${r.prioridad ? 'checked' : ''} ${canEdit() ? '' : 'disabled'} data-ro="${esc(r.ro)}" onchange="togglePriority(this.dataset.ro, this.checked)" class="rounded border-slate-300 text-sky-600">
@@ -1133,7 +1231,7 @@ function renderTable(rows) {
       const cs = list.map(cobroInfo);
       html += `<tr class="bg-sky-50/70 cursor-pointer" data-mes="${k}" onclick="setMes(this.dataset.mes)">
         <td colspan="${ncols}" class="px-3 py-2 text-xs font-semibold text-slate-700">
-          ${mesLabel(k)} <span class="font-normal text-slate-500">· ${list.length} RO · Comisión ${fmt$(sum(list, r => r.comision))} · Cobrada ${fmt$(sum(cs, c => c.cob))} · Lista p/ cobrar ${fmt$(sum(cs.filter(c => c.cobrable), c => c.saldo))}</span>
+          ${mesLabel(k)} <span class="font-normal text-slate-500">· ${list.length} RO · Comisión ${fmt$(sum(list, comTotal))} · Cobrada ${fmt$(sum(cs, c => c.cob))} · Lista p/ cobrar ${fmt$(sum(cs.filter(c => c.cobrable), c => c.saldo))}</span>
         </td></tr>` + list.map(rowHtml).join('');
     });
   } else {
@@ -1143,7 +1241,7 @@ function renderTable(rows) {
   const cs = rows.map(cobroInfo);
   document.getElementById('tfootMain').innerHTML = rows.length ? `<tr>
     <td class="px-3 py-2" colspan="11">Total (${rows.length} RO)</td>
-    <td class="px-3 py-2 text-right whitespace-nowrap">${fmt$(sum(rows, r => r.comision))}</td>
+    <td class="px-3 py-2 text-right whitespace-nowrap">${fmt$(sum(rows, comTotal))}</td>
     <td class="px-3 py-2 text-xs font-normal text-slate-600 whitespace-nowrap" colspan="${ncols - 12}">Cobrada ${fmt$(sum(cs, c => c.cob))} · Por cobrar ${fmt$(sum(cs, c => c.saldo))}</td>
   </tr>` : '';
   document.getElementById('footerCount').textContent = `Mostrando ${rows.length} de ${DATA.length} oportunidad(es)`;
@@ -1163,16 +1261,16 @@ function renderKPIs(rows) {
   set('kRO', rows.length);
   set('kROsub', `${rows.filter(r => r.estado === 'ABIERTA').length} abiertas · ${rows.filter(r => faltantes(r).obligatorios.length).length} con datos obligatorios faltantes`);
   set('kCom', fmt$(com));
-  set('kComSub', `${rows.filter(r => !(Number(r.comision) > 0)).length} RO sin comisión registrada`);
+  set('kComSub', `propia ${fmt$(sum(cs, c => c.propia.com))} · broker ${fmt$(sum(cs, c => c.broker.com))}`);
   set('kCob', fmt$(cob));
   set('kCobSub', com ? `${Math.round(cob / com * 100)}% del total` : '—');
   set('kLista', fmt$(sum(lista, c => c.saldo)));
   set('kListaSub', `${lista.length} RO · ${lista.filter(c => c.diasDesdePago > 30).length} con más de 30 días`);
   set('kEspera', fmt$(sum(espera, c => c.saldo)));
   set('kEsperaSub', `${espera.length} RO · ${espera.filter(c => c.diasSinPago > 0).length} ya arribadas`);
-  const ap = rows.filter(r => r.seguroAplica === 'APLICA').length, na = rows.filter(r => r.seguroAplica === 'NO APLICA').length, sd = rows.length - ap - na;
-  set('kSeg', rows.length ? Math.round(ap / rows.length * 100) + '%' : '0%');
-  set('kSegSub', `${ap} aplica · ${na} no aplica · ${sd} sin definir`);
+  const conSeg = rows.filter(r => r.seguroAplica === 'SI'), listos = conSeg.filter(r => r.seguroEstado === 'LISTO').length;
+  set('kSeg', conSeg.length ? Math.round(listos / conSeg.length * 100) + '%' : '—');
+  set('kSegSub', `${listos} listos de ${conSeg.length} con seguro · ${rows.filter(seguroPendiente).length} por gestionar`);
 }
 
 // ============ RESUMEN POR MES DE CIERRE ============
@@ -1189,7 +1287,7 @@ function renderMonthly(rows) {
       <td class="px-4 py-2.5 text-right text-amber-700">${fmt$(sum(cs.filter(c => c.cobrable), c => c.saldo))}</td>
       <td class="px-4 py-2.5 text-right text-violet-700">${fmt$(sum(cs.filter(c => c.estado === 'ESPERA PAGO CLIENTE'), c => c.saldo))}</td>
       <td class="px-4 py-2.5"><div class="flex items-center gap-2"><div class="h-2 flex-1 bg-slate-100 rounded"><div class="bar h-2 bg-emerald-500 rounded" style="width:${pct}%"></div></div><span class="text-xs w-9 text-right">${pct}%</span></div></td>
-      <td class="px-4 py-2.5 text-right">${list.filter(r => !r.seguroAplica).length}</td>
+      <td class="px-4 py-2.5 text-right">${list.filter(seguroPendiente).length}</td>
       <td class="px-4 py-2.5 text-right">${list.filter(r => faltantes(r).obligatorios.length + faltantes(r).importantes.length).length}</td>
     </tr>`;
   };
@@ -1246,18 +1344,18 @@ function renderEtaAlerts(rows) {
 }
 
 function renderUninsured(rows) {
-  const sinDef = rows.filter(r => !r.seguroAplica);
-  document.getElementById('uninsuredCount').textContent = `${sinDef.length} sin definir`;
+  const sinDef = rows.filter(seguroPendiente);
+  document.getElementById('uninsuredCount').textContent = `${sinDef.length} por gestionar`;
   document.getElementById('listUninsured').innerHTML = sinDef.map(r => `
     <li class="rounded-md border px-3 py-2 ${r.ro === selectedInsuranceRO ? 'border-sky-300 bg-sky-50/60' : 'border-amber-100 bg-amber-50/40'}">
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
           <span class="font-semibold text-slate-700">RO ${esc(r.ro)}</span>
-          <div class="text-xs text-slate-500 truncate">${esc(r.consignatario)} · ${esc(r.ruta)}</div>
+          <div class="text-xs text-slate-500 truncate">${esc(r.consignatario)} · ${esc(r.ruta)} · ${seguroLabel(r) || 'sin definir'}</div>
         </div>
         ${canEdit() ? `<button type="button" data-ro="${esc(r.ro)}" onclick="openInsuranceCalculator(this.dataset.ro)" class="shrink-0 text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-full px-3 py-1.5">Definir</button>` : ''}
       </div>
-    </li>`).join('') || '<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">Todas las operaciones tienen SEGURO. definido.</li>';
+    </li>`).join('') || '<li class="text-xs text-emerald-700 rounded-md bg-emerald-50 px-3 py-3 text-center">No hay seguros por gestionar.</li>';
 }
 
 function renderFaltantes(rows) {
@@ -1325,16 +1423,20 @@ function openModal(ro) {
   est.textContent = r.estado;
   est.className = 'text-xs font-semibold rounded-full px-3 py-1 ' + (ESTADO_BADGE[r.estado] || 'bg-slate-100 text-slate-700');
   document.getElementById('mComercial').innerHTML = dl([
-    ['BROKER', cellVal(r, 'broker')], ['COMISION PROPIA', Number(r.comision) > 0 ? fmt$(r.comision) : cellVal(r, 'comision')],
+    ['BROKER', cellVal(r, 'broker')],
+    ['COMISION (broker)', c.broker.com > 0 ? fmt$(c.broker.com) + (c.broker.igv ? ' + IGV' : '') : esc(r.comisionBrokerTexto || '—')],
+    ['PROFIT', Number(r.profit) ? fmt$(r.profit) : '—'],
+    ['COMISION PROPIA', Number(r.comision) > 0 ? fmt$(r.comision) + (Number(r.comisionPct) ? ` (${Math.round(r.comisionPct * 1000) / 10}%)` : '') : cellVal(r, 'comision')],
     ['CIERRE', cellVal(r, 'cierre')], ['VALIDEZ', esc(r.validez || '—')],
-    ['SEGURO.', r.seguroAplica ? `<span class="text-xs rounded px-1.5 py-0.5 ${SEGURO_BADGE[r.seguroAplica]}">${r.seguroAplica}</span>` : cellVal(r, 'seguroAplica')],
+    ['SEGURO', esc(r.seguroAplica || '—')], ['SEGURO.', segBadge(r)],
     ['Prima seguro', Number(r.seguroPrima) > 0 ? fmt$(r.seguroPrima) : '—'], ['OBSERVACION', esc(r.observacion || '—')]
   ]);
   document.getElementById('mCobro').innerHTML = dl([
     ['Estado', `<span class="text-xs rounded px-1.5 py-0.5 ${COBRO_BADGE[c.estado]}">${c.estado}</span>`],
     ['Pago del cliente', esc(r.fechaPagoCliente || 'pendiente')],
-    ['Comisión cobrada', fmt$(c.cob)], ['Saldo por cobrar', `<span class="${c.saldo ? 'text-amber-700' : ''}">${fmt$(c.saldo)}</span>`],
-    ['Fecha cobro', esc(r.fechaCobro || '—')]
+    ['Propia cobrada', `${fmt$(c.propia.cob)} de ${fmt$(c.propia.com)}${r.fechaCobro ? ' · ' + esc(r.fechaCobro) : ''}`],
+    ['Broker cobrada', `${fmt$(c.broker.cob)} de ${fmt$(c.broker.com)}${c.broker.igv ? ' + IGV' : ''}${r.fechaCobroBroker ? ' · ' + esc(r.fechaCobroBroker) : ''}`],
+    ['Saldo por cobrar', `<span class="${c.saldo ? 'text-amber-700' : ''}">${fmt$(c.saldo)}</span>`]
   ]) + (canEdit() && c.com > 0 && c.estado !== 'COBRADA' ? `<button type="button" onclick="const ro=currentModalRO; closeModal(); openCobro(ro)" class="mt-2 text-xs bg-amber-400 hover:bg-amber-300 text-slate-900 font-medium rounded-full px-3 py-1.5">Registrar pago / cobro</button>` : '');
   document.getElementById('mOperativo').innerHTML = dl([
     ['SERVICIO', cellVal(r, 'servicio')], ['RUTA', cellVal(r, 'ruta')], ['NAVIERA', esc(r.naviera || '—')], ['CANTIDAD', esc(r.cantidad || '—')],
@@ -1379,8 +1481,12 @@ function openCobro(ro) {
   const c = cobroInfo(r);
   document.getElementById('cobroLabel').textContent = `RO ${r.ro} · ${r.consignatario} · comisión ${fmt$(c.com)}`;
   document.getElementById('cbPagoCliente').value = toIsoDate(r.fechaPagoCliente) || toIsoDate(fmtDate(hoy()));
-  document.getElementById('cbCobrado').value = c.cob || '';
+  document.getElementById('cbCobrado').value = c.propia.cob || '';
   document.getElementById('cbFechaCobro').value = toIsoDate(r.fechaCobro);
+  document.getElementById('cbCobradoBroker').value = c.broker.cob || '';
+  document.getElementById('cbFechaCobroBroker').value = toIsoDate(r.fechaCobroBroker);
+  document.getElementById('cbLblPropia').textContent = `Comisión propia cobrada (de ${fmt$(c.propia.com)})`;
+  document.getElementById('cbLblBroker').textContent = `Comisión broker cobrada (de ${fmt$(c.broker.com)}${c.broker.igv ? ' + IGV' : ''})`;
   document.getElementById('cbSaldo').textContent = `Saldo actual por cobrar: ${fmt$(c.saldo)}`;
   document.getElementById('cobroFeedback').textContent = '';
   document.getElementById('cobroBox').classList.remove('hidden');
@@ -1393,12 +1499,17 @@ function saveCobro(total) {
   const pago = normDate(document.getElementById('cbPagoCliente').value);
   let cobrado = Number(document.getElementById('cbCobrado').value) || 0;
   let fechaCobro = normDate(document.getElementById('cbFechaCobro').value);
-  if (total) { cobrado = Number(r.comision) || 0; if (!fechaCobro) fechaCobro = fmtDate(hoy()); }
-  if (cobrado > 0 && !pago) { fb.textContent = 'Primero registra la fecha en que el cliente pagó el servicio.'; return; }
+  let cobradoB = Number(document.getElementById('cbCobradoBroker').value) || 0;
+  let fechaCobroB = normDate(document.getElementById('cbFechaCobroBroker').value);
+  if (total) { cobrado = Number(r.comision) || 0; cobradoB = Number(r.comisionBroker) || 0; }
+  if ((cobrado > 0 || cobradoB > 0) && !pago) { fb.textContent = 'Primero registra la fecha en que el cliente pagó el servicio.'; return; }
+  if (cobrado > (Number(r.comision) || 0) + 0.001) { fb.textContent = `La comisión propia cobrada supera la comisión (${fmt$(r.comision)}).`; return; }
+  if (cobradoB > (Number(r.comisionBroker) || 0) + 0.001) { fb.textContent = `La comisión del broker cobrada supera su monto (${fmt$(r.comisionBroker)}).`; return; }
   if (cobrado > 0 && !fechaCobro) fechaCobro = fmtDate(hoy());
-  if (cobrado > (Number(r.comision) || 0) + 0.001) { fb.textContent = `El monto cobrado supera la comisión (${fmt$(r.comision)}).`; return; }
+  if (cobradoB > 0 && !fechaCobroB) fechaCobroB = fmtDate(hoy());
   r.fechaPagoCliente = pago; r.cobrado = cobrado; r.fechaCobro = cobrado > 0 ? fechaCobro : '';
-  persist(r, ['fechaPagoCliente', 'cobrado', 'fechaCobro']).catch(e => showImportFeedback('No se guardó el cobro: ' + errMsg(e), false));
+  r.cobradoBroker = cobradoB; r.fechaCobroBroker = cobradoB > 0 ? fechaCobroB : '';
+  persist(r, ['fechaPagoCliente', 'cobrado', 'fechaCobro', 'cobradoBroker', 'fechaCobroBroker']).catch(e => showImportFeedback('No se guardó el cobro: ' + errMsg(e), false));
   const c = cobroInfo(r);
   fb.textContent = c.estado === 'COBRADA' ? `Comisión de ${r.ro} cobrada por completo.` : `Guardado. Estado: ${c.estado.toLowerCase()} · saldo ${fmt$(c.saldo)}.`;
   document.getElementById('cbSaldo').textContent = `Saldo actual por cobrar: ${fmt$(c.saldo)}`;
@@ -1413,12 +1524,23 @@ function openInsuranceCalculator(ro) {
   document.getElementById('insuranceCalculator').classList.remove('hidden');
   document.getElementById('calcROLabel').textContent = `RO ${r.ro} · ${r.consignatario}`;
   document.getElementById('insuredValue').value = '';
-  document.getElementById('insuranceRate').value = '0.30';
+  const t = tasaSeguro(r.consignatario);
+  document.getElementById('insuranceRate').value = t ? +(t.tasa * 100).toFixed(3) : '0.30';
   document.getElementById('premiumResult').value = '$0.00';
   document.getElementById('minApplied').classList.add('hidden');
-  document.getElementById('insuranceFeedback').textContent = '';
+  document.getElementById('insuranceFeedback').textContent = t ? `Tasa acordada con ${t.empresa}: ${+(t.tasa * 100).toFixed(3)}%` : '';
   document.getElementById('insuranceCalculator').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   renderUninsured(filteredRows());
+}
+// Tasas de seguro acordadas por cliente (hoja "Tasas seguro" del Excel)
+const TASAS_KEY = 'crm_tasas_seguro_v1';
+function tasasSeguro() {
+  try { const v = IS_GAS ? (APP.config || {}).TasasSeguro : localStorage.getItem(TASAS_KEY); const o = typeof v === 'string' ? JSON.parse(v) : v; return o && o.tasas ? o : { tasas: {} }; } catch (e) { return { tasas: {} }; }
+}
+function tasaSeguro(consignatario) {
+  const k = empresaKey(consignatario || ''); if (!k) return null;
+  const hit = Object.entries(tasasSeguro().tasas).find(([e]) => { const ek = empresaKey(e); return ek && (ek === k || (ek.length >= 5 && (k.includes(ek) || ek.includes(k)))); });
+  return hit ? { empresa: hit[0], tasa: Number(hit[1]) } : null;
 }
 const MIN_KEY = 'crm_prima_minima_usd';
 const DEFAULT_MIN = 60;
@@ -1455,18 +1577,18 @@ function saveCalculatedInsurance() {
   const r = DATA.find(x => x.ro === selectedInsuranceRO); if (!r) return;
   const premium = calculatePremium();
   if (premium <= 0) { document.getElementById('insuranceFeedback').textContent = 'Ingresa un valor asegurado y una tasa válida para calcular la prima.'; return; }
-  r.seguroAplica = 'APLICA';
+  r.seguroAplica = 'SI'; r.seguroEstado = 'LISTO';
   r.seguroPrima = Number(premium.toFixed(2));
-  persist(r, ['seguroAplica', 'seguroPrima']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
-  document.getElementById('insuranceFeedback').textContent = `SEGURO. = APLICA · prima USD ${premium.toFixed(2)} para ${r.ro}.`;
+  persist(r, ['seguroAplica', 'seguroEstado', 'seguroPrima']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
+  document.getElementById('insuranceFeedback').textContent = `Seguro LISTO · prima USD ${premium.toFixed(2)} para ${r.ro}.`;
   applyFilters();
 }
 function confirmNoInsurance() {
   const r = DATA.find(x => x.ro === selectedInsuranceRO); if (!r) return;
   if (!confirm(`¿Confirmas que en la operación ${r.ro} el seguro NO APLICA?`)) return;
-  r.seguroAplica = 'NO APLICA';
+  r.seguroAplica = 'NO'; r.seguroEstado = 'NO APLICA';
   r.seguroPrima = 0;
-  persist(r, ['seguroAplica', 'seguroPrima']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
+  persist(r, ['seguroAplica', 'seguroEstado', 'seguroPrima']).catch(e => showImportFeedback('No se guardó el seguro: ' + errMsg(e), false));
   document.getElementById('insuranceFeedback').textContent = `SEGURO. = NO APLICA para ${r.ro}.`;
   applyFilters();
 }
@@ -1503,6 +1625,7 @@ async function handleExcelImport(input) {
     DATA = await importExcelFile(file);
     if (DATA.clientes) { CLIENTES = DATA.clientes; saveClientes(); }
     saveData();
+    if (DATA.tasas) { try { localStorage.setItem(TASAS_KEY, JSON.stringify(DATA.tasas)); if (DATA.tasas.minimo) localStorage.setItem(MIN_KEY, String(DATA.tasas.minimo)); } catch (e) {} loadMinPremium(); }
     fillSelects();
     applyFilters();
     const ob = DATA.filter(r => faltantes(r).obligatorios.length).length, im = DATA.filter(r => faltantes(r).importantes.length).length;
@@ -1527,10 +1650,15 @@ const FORM_FIELDS = [
   { sec:'Comercial', key:'ro' },
   { sec:'Comercial', key:'cierre', type:'date' },
   { sec:'Comercial', key:'validez', type:'date' },
-  { sec:'Comercial', key:'broker', list:'broker' },
-  { sec:'Comercial', key:'comision', type:'number' },
   { sec:'Comercial', key:'estado', type:'select', options:['ABIERTA','CERRADA','GANADA','PERDIDA'] },
-  { sec:'Operativo', key:'servicio', type:'select', options:['', 'FCL', 'LCL', 'Aéreo', 'Terrestre'] },
+  { sec:'Comercial', key:'broker', list:'broker' },
+  { sec:'Comercial', key:'comisionBrokerTexto', label:'COMISION broker (texto, p. ej. USD 50 + IGV)' },
+  { sec:'Comercial', key:'comisionBroker', type:'number', label:'COMISION broker USD' },
+  { sec:'Comercial', key:'comisionBrokerIgv', type:'select', options:[['', '—'], ['SI', '+ IGV'], ['NO', 'Sin IGV']], label:'IGV broker' },
+  { sec:'Comercial', key:'profit', type:'number', label:'PROFIT USD' },
+  { sec:'Comercial', key:'comisionPct', type:'number', label:'% COMISION (ej. 10)' },
+  { sec:'Comercial', key:'comision', type:'number', label:'COMISION PROPIA USD (PROFIT × %)' },
+  { sec:'Operativo', key:'servicio', list:'servicio' },
   { sec:'Operativo', key:'consignatario', list:'consignatario' },
   { sec:'Operativo', key:'ref' },
   { sec:'Operativo', key:'agente', list:'agente' },
@@ -1538,13 +1666,16 @@ const FORM_FIELDS = [
   { sec:'Operativo', key:'naviera', list:'naviera' },
   { sec:'Operativo', key:'etd', type:'date' },
   { sec:'Operativo', key:'eta', type:'date' },
-  { sec:'Operativo', key:'cantidad' },
-  { sec:'Seguro y control', key:'seguroAplica', type:'select', options:[['', 'Sin definir'], ['APLICA', 'APLICA'], ['NO APLICA', 'NO APLICA']] },
+  { sec:'Operativo', key:'cantidad', list:'cantidad' },
+  { sec:'Seguro y control', key:'seguroAplica', type:'select', options:[['', 'Sin definir'], ['SI', 'SI'], ['NO', 'NO']], label:'SEGURO (¿aplica?)' },
+  { sec:'Seguro y control', key:'seguroEstado', type:'select', options:[['', '—'], ['PENDIENTE', 'PENDIENTE'], ['LISTO', 'LISTO'], ['CANCELADO', 'CANCELADO'], ['NO APLICA', 'NO APLICA']], label:'SEGURO. (estado)' },
   { sec:'Seguro y control', key:'seguroPrima', type:'number' },
   { sec:'Seguro y control', key:'prioridad', type:'checkbox', label:'Prioridad alta' },
-  { sec:'Cobro de comisión (después del pago del cliente)', key:'fechaPagoCliente', type:'date' },
-  { sec:'Cobro de comisión (después del pago del cliente)', key:'cobrado', type:'number' },
-  { sec:'Cobro de comisión (después del pago del cliente)', key:'fechaCobro', type:'date' },
+  { sec:'Cobro de comisiones (después del pago del cliente)', key:'fechaPagoCliente', type:'date' },
+  { sec:'Cobro de comisiones (después del pago del cliente)', key:'cobrado', type:'number', label:'Comisión propia cobrada USD' },
+  { sec:'Cobro de comisiones (después del pago del cliente)', key:'fechaCobro', type:'date' },
+  { sec:'Cobro de comisiones (después del pago del cliente)', key:'cobradoBroker', type:'number' },
+  { sec:'Cobro de comisiones (después del pago del cliente)', key:'fechaCobroBroker', type:'date' },
   { sec:'Observación y alertas', key:'observacion', type:'textarea' },
   { sec:'Observación y alertas', key:'alertas', type:'textarea', label:'Alertas (una por línea; las que dicen "ETA" van al panel de alertas ETA)' },
 ].map(f => ({ ...f, nivel: nivelDe[f.key] || '', label: f.label || LABELS[f.key] }));
@@ -1568,7 +1699,7 @@ function buildROForm() {
     }).join('');
     return `<fieldset><legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">${sec}</legend>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${fields}</div></fieldset>`;
-  }).join('') + ['ruta', 'naviera', 'broker', 'agente', 'consignatario'].map(k => `<datalist id="dl_${k}"></datalist>`).join('');
+  }).join('') + ['ruta', 'naviera', 'broker', 'agente', 'servicio', 'cantidad', 'consignatario'].map(k => `<datalist id="dl_${k}"></datalist>`).join('');
   body.dataset.built = '1';
 }
 
@@ -1585,17 +1716,18 @@ function openROForm(ro) {
   const r = ro ? DATA.find(x => x.ro === ro) : null;
   if (ro && !r) return;
   document.getElementById('dl_consignatario').innerHTML = [...new Set([...CLIENTES.map(c => c.empresa), ...DATA.map(d => d.consignatario)].filter(v => !isBlank(v)))].sort().map(v => `<option value="${esc(v)}">`).join('');
-  ['ruta', 'naviera', 'broker', 'agente'].forEach(k => {
+  ['ruta', 'naviera', 'broker', 'agente', 'servicio', 'cantidad'].forEach(k => {
     document.getElementById('dl_' + k).innerHTML = [...new Set(DATA.map(d => d[k]).filter(v => !isBlank(v)))].sort().map(v => `<option value="${esc(v)}">`).join('');
   });
-  const defaults = { ro: suggestRO(), estado: 'ABIERTA', cierre: fmtDate(hoy()) };
+  const defaults = { ro: suggestRO(), estado: 'ABIERTA', cierre: fmtDate(hoy()), seguroAplica: 'SI', seguroEstado: 'PENDIENTE' };
   FORM_FIELDS.forEach(f => {
     const el = document.getElementById(fieldId(f));
     const v = r ? r[f.key] : defaults[f.key];
     if (f.type === 'checkbox') el.checked = !!v;
     else if (f.type === 'date') el.value = toIsoDate(v);
     else if (f.key === 'alertas') el.value = (v || []).join('\n');
-    else if (f.type === 'number') el.value = Number(v) > 0 ? v : '';
+    else if (f.key === 'comisionPct') el.value = Number(v) ? +(Number(v) * 100).toFixed(2) : '';
+    else if (f.type === 'number') el.value = Number(v) ? v : '';
     else el.value = v ?? '';
   });
   const roEl = document.getElementById('ff_ro');
@@ -1625,20 +1757,25 @@ async function submitROForm(ev) {
     let v;
     if (f.type === 'checkbox') v = el.checked;
     else if (f.type === 'date') v = normDate(el.value);
+    else if (f.key === 'comisionPct') v = el.value === '' ? '' : (Number(el.value) || 0) / 100;
     else if (f.type === 'number') v = Number(el.value) || 0;
     else if (f.key === 'alertas') v = el.value.split('\n').map(x => x.replace(/[<>]/g, '').trim()).filter(Boolean);
     else v = el.value.replace(/[<>]/g, '').trim();
     r[f.key] = v;
   });
+  if (!(r.comision > 0) && r.profit && r.comisionPct) r.comision = Math.round(r.profit * r.comisionPct * 100) / 100;   // PROFIT × %
+  if (!(r.comisionBroker > 0) && r.comisionBrokerTexto) { const pc = parseComisionTexto(r.comisionBrokerTexto); r.comisionBroker = pc.monto; if (!r.comisionBrokerIgv) r.comisionBrokerIgv = pc.igv ? 'SI' : 'NO'; }
   const fl = faltantes(r);
   if (fl.obligatorios.length) return fail('Completa los datos obligatorios: ' + fl.obligatorios.map(k => LABELS[k]).join(', ') + '.');
   const wasEditing = editingRO;
   if (!wasEditing && DATA.some(x => String(x.ro).toLowerCase() === r.ro.toLowerCase())) return fail(`Ya existe el RO ${r.ro}.`);
   const etd = parseDate(r.etd), eta = parseDate(r.eta);
   if (etd && eta && eta < etd) return fail('La ETA no puede ser anterior al ETD.');
-  if (r.cobrado > 0 && !r.fechaPagoCliente) return fail('La comisión se cobra después del pago del cliente: registra primero la fecha de pago del cliente.');
-  if (r.cobrado > (Number(r.comision) || 0) + 0.001) return fail('La comisión cobrada no puede superar la COMISION PROPIA.');
+  if ((r.cobrado > 0 || r.cobradoBroker > 0) && !r.fechaPagoCliente) return fail('Las comisiones se cobran después del pago del cliente: registra primero la fecha de pago del cliente.');
+  if (r.cobrado > (Number(r.comision) || 0) + 0.001) return fail('La comisión propia cobrada no puede superar la COMISION PROPIA.');
+  if (r.cobradoBroker > (Number(r.comisionBroker) || 0) + 0.001) return fail('La comisión broker cobrada no puede superar su monto.');
   if (r.cobrado > 0 && !r.fechaCobro) r.fechaCobro = fmtDate(hoy());
+  if (r.cobradoBroker > 0 && !r.fechaCobroBroker) r.fechaCobroBroker = fmtDate(hoy());
   if (fl.importantes.length && !warnedImportant) {
     warnedImportant = true;
     return fail('Faltan datos importantes: ' + fl.importantes.map(k => LABELS[k]).join(', ') + '. Pulsa Guardar otra vez para continuar igual.', true);
@@ -1695,6 +1832,7 @@ function statsCliente(empresa) {
   const ops = opsDe(empresa), cs = ops.map(cobroInfo);
   const ult = ops.map(r => parseDate(r.cierre)).filter(Boolean).sort((a, b) => b - a)[0];
   return { ops, n: ops.length, com: sum(cs, c => c.com), cob: sum(cs, c => c.cob), saldo: sum(cs, c => c.saldo),
+           propia: sum(cs, c => c.propia.com), broker: sum(cs, c => c.broker.com), profit: sum(ops, r => r.profit),
            rutas: new Set(ops.map(r => r.ruta).filter(Boolean)).size, ultimo: ult ? fmtDate(ult) : '' };
 }
 const telLink = c => String(c || '').replace(/[^\d+]/g, '');
@@ -1707,9 +1845,13 @@ function contactBtns(c) {
 
 const CLI_COLS = [
   { key:'empresa', label:'Empresa' }, { key:'contacto', label:'Contacto' }, { key:'celular', label:'Celular' }, { key:'correo', label:'Correo' },
-  { key:'direccion', label:'Dirección' }, { key:'distrito', label:'Distrito', select:true }, { key:'semana', label:'Semana', select:true },
+  { key:'direccion', label:'Dirección' }, { key:'distrito', label:'Distrito', select:true },
+  { key:'estado', label:'Estado', select:true, value: c => c.estado || 'ACTIVO' },
+  { key:'gestion', label:'Última gestión', value: c => ultimaGestion(c) ? `S${ultimaGestion(c).semana} ${ultimaGestion(c).nota}` : '' },
 ];
 const CLI_FILTERS = {};
+const ultimaGestion = c => (c.seguimiento || []).slice().sort((a, b) => b.semana - a.semana)[0] || null;
+const cliVal = (col, c) => col.value ? col.value(c) : c[col.key];
 function buildCliHeader() {
   const thead = document.getElementById('theadCli');
   thead.innerHTML = `<tr>${CLI_COLS.map(c => `<th class="px-3 pt-3 pb-1 text-left font-medium bg-slate-50 whitespace-nowrap">${c.label}</th>`).join('')}
@@ -1723,8 +1865,8 @@ function clearCliFilters() { document.querySelectorAll('[data-ckey]').forEach(el
 function refreshCliOptions() {
   CLI_COLS.filter(c => c.select).forEach(c => {
     const sel = document.querySelector(`[data-ckey="${c.key}"]`); const cur = sel.value;
-    const vals = [...new Set(CLIENTES.map(x => isBlank(x[c.key]) ? VACIO : String(x[c.key])))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
-    sel.innerHTML = '<option value="">Todos</option>' + vals.map(v => `<option value="${esc(v)}">${c.key === 'semana' && v !== VACIO ? 'Semana ' + esc(v) : esc(v)}</option>`).join('');
+    const vals = [...new Set(CLIENTES.map(x => isBlank(cliVal(c, x)) ? VACIO : String(cliVal(c, x))))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    sel.innerHTML = '<option value="">Todos</option>' + vals.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
     sel.value = vals.includes(cur) ? cur : ''; CLI_FILTERS[c.key] = sel.value;
   });
 }
@@ -1734,7 +1876,7 @@ function renderClientes() {
   const dash = '<span class="text-slate-400">—</span>';
   const list = CLIENTES.filter(c => CLI_COLS.every(col => {
     const f = CLI_FILTERS[col.key]; if (!f) return true;
-    const v = isBlank(c[col.key]) ? VACIO : String(c[col.key]);
+    const v = isBlank(cliVal(col, c)) ? VACIO : String(cliVal(col, c));
     return col.select ? v === f : (v === VACIO ? '' : v).toLowerCase().includes(f.trim().toLowerCase());
   })).map(c => ({ c, s: statsCliente(c.empresa) })).sort((a, b) => b.s.com - a.s.com || a.c.empresa.localeCompare(b.c.empresa));
   document.getElementById('cliCount').textContent = `${list.length} de ${CLIENTES.length}`;
@@ -1747,12 +1889,13 @@ function renderClientes() {
       <td class="px-3 py-2 text-slate-600">${esc(c.correo) || dash}</td>
       <td class="px-3 py-2 text-slate-600">${esc(c.direccion) || dash}</td>
       <td class="px-3 py-2 text-slate-600">${esc(c.distrito) || dash}</td>
-      <td class="px-3 py-2">${c.semana ? `<span class="text-[11px] rounded-full px-2 py-0.5 ${String(c.semana) === String(semana) ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}">S${esc(c.semana)}</span>` : dash}</td>
+      <td class="px-3 py-2">${c.estado ? `<span class="text-[11px] rounded-full px-2 py-0.5 bg-slate-100 text-slate-500 whitespace-nowrap">${esc(c.estado)}</span>` : '<span class="text-[11px] rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">ACTIVO</span>'}</td>
+      <td class="px-3 py-2 text-xs text-slate-600 max-w-[260px]">${ultimaGestion(c) ? `<span class="text-[11px] rounded-full px-2 py-0.5 mr-1 ${ultimaGestion(c).semana === semana ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">S${ultimaGestion(c).semana}</span><span class="line-clamp-2">${esc(ultimaGestion(c).nota)}</span>` : dash}</td>
       <td class="px-3 py-2 text-right">${s.n}</td>
       <td class="px-3 py-2 text-right font-medium">${fmt$(s.com)}</td>
       <td class="px-3 py-2 text-right ${s.saldo ? 'text-amber-700' : 'text-slate-400'}">${fmt$(s.saldo)}</td>
       <td class="px-3 py-2"><div class="flex items-center justify-end gap-1">${contactBtns(c)}</div></td>
-    </tr>`).join('') || '<tr><td colspan="11" class="px-4 py-4 text-center text-sm text-slate-400">No hay clientes con estos filtros.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="12" class="px-4 py-4 text-center text-sm text-slate-400">No hay clientes con estos filtros.</td></tr>';
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   // Ranking por comisión
@@ -1772,7 +1915,7 @@ function renderClientes() {
   set('ckSinFicha', sinFicha.length);
   document.getElementById('listSinFicha').innerHTML = sinFicha.map(([nombre, ops]) => `
     <li class="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between gap-2">
-      <div class="min-w-0"><div class="text-sm text-slate-700 truncate">${esc(nombre)}</div><div class="text-xs text-slate-500">${ops.length} RO · ${fmt$(sum(ops, r => r.comision))}</div></div>
+      <div class="min-w-0"><div class="text-sm text-slate-700 truncate">${esc(nombre)}</div><div class="text-xs text-slate-500">${ops.length} RO · ${fmt$(sum(ops, r => cobroInfo(r).com))}</div></div>
       ${canEdit() ? `<button type="button" data-emp="${esc(nombre)}" onclick="openClienteForm(null, this.dataset.emp)" class="shrink-0 text-xs btn-primary px-3 py-1">Agregar</button>` : ''}
     </li>`).join('') || '<li class="text-xs text-emerald-700">Todos los consignatarios tienen ficha ✔</li>';
 }
@@ -1784,14 +1927,16 @@ function openCliModal(empresa) {
   currentCli = c.empresa;
   const s = statsCliente(c.empresa);
   document.getElementById('cfTitle').textContent = c.empresa;
-  document.getElementById('cfSub').textContent = [c.contacto, c.celular, c.correo, [c.direccion, c.distrito].filter(Boolean).join(', '), c.semana ? 'Semana ' + c.semana : ''].filter(Boolean).join(' · ') || 'Sin datos de contacto';
+  document.getElementById('cfSub').textContent = [c.contacto, c.celular, c.correo, [c.direccion, c.distrito].filter(Boolean).join(', '), c.estado || ''].filter(Boolean).join(' · ') || 'Sin datos de contacto';
   document.getElementById('cfActions').innerHTML = contactBtns(c)
     + (canEdit() && CLIENTES.includes(c) ? `<button type="button" onclick="const e=currentCli; closeCliModal(); openClienteForm(e)" class="text-xs border border-slate-200 hover:bg-slate-50 px-3 py-1.5">Editar</button>` : '')
     + `<button type="button" onclick="verOperacionesCliente()" class="text-xs btn-primary px-3 py-1.5">Ver en Operaciones</button>
        <button type="button" onclick="closeCliModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none px-1">&times;</button>`;
   const kpi = (l, v, cls = '') => `<div class="rounded-lg bg-slate-50 p-3"><p class="text-[11px] text-slate-500">${l}</p><p class="text-lg font-semibold ${cls}">${v}</p></div>`;
-  document.getElementById('cfKpis').innerHTML = kpi('RO', s.n) + kpi('Comisión total', fmt$(s.com)) + kpi('Cobrada', fmt$(s.cob), 'text-emerald-700') + kpi('Por cobrar', fmt$(s.saldo), 'text-amber-700') + kpi('Último cierre', s.ultimo || '—');
-  const cuenta = (arr, f) => [...groupBy(arr, f)].map(([k, l]) => ({ k: k || '(vacío)', n: l.length, com: sum(l, r => r.comision) })).sort((a, b) => b.n - a.n || b.com - a.com);
+  document.getElementById('cfKpis').innerHTML = kpi('RO', s.n) + kpi('Profit', fmt$(s.profit)) + kpi('Comisión total', `${fmt$(s.com)}<div class="text-[10px] font-normal text-slate-500">propia ${fmt$(s.propia)} · broker ${fmt$(s.broker)}</div>`)
+    + kpi('Cobrada', fmt$(s.cob), 'text-emerald-700') + kpi('Por cobrar', fmt$(s.saldo), 'text-amber-700');
+  renderSeguimiento(c);
+  const cuenta = (arr, f) => [...groupBy(arr, f)].map(([k, l]) => ({ k: k || '(vacío)', n: l.length, com: sum(l, r => cobroInfo(r).com) })).sort((a, b) => b.n - a.n || b.com - a.com);
   const rutas = cuenta(s.ops, r => r.ruta), maxR = Math.max(1, ...rutas.map(x => x.n));
   document.getElementById('cfRutas').innerHTML = rutas.map(x => `
     <div><div class="flex justify-between text-xs mb-1"><span class="text-slate-700">${esc(x.k)}</span><span class="text-slate-500">${x.n} RO · ${fmt$(x.com)}</span></div>
@@ -1800,7 +1945,7 @@ function openCliModal(empresa) {
   document.getElementById('cfMix').innerHTML = chips('Servicios', cuenta(s.ops, r => r.servicio)) + chips('Navieras', cuenta(s.ops, r => r.naviera)) + chips('Brokers', cuenta(s.ops, r => r.broker || '(sin broker)'));
   const meses = [...groupBy([...s.ops].sort((a, b) => mesCierre(a).localeCompare(mesCierre(b))), mesCierre)].slice(-8), maxM = Math.max(1, ...meses.map(([, l]) => l.length));
   document.getElementById('cfMeses').innerHTML = meses.map(([k, l]) => `
-    <div class="flex-1 flex flex-col items-center justify-end h-full gap-1" title="${mesLabel(k)}: ${l.length} RO · ${fmt$(sum(l, r => r.comision))}">
+    <div class="flex-1 flex flex-col items-center justify-end h-full gap-1" title="${mesLabel(k)}: ${l.length} RO · ${fmt$(sum(l, r => cobroInfo(r).com))}">
       <span class="text-[10px] text-slate-500">${l.length}</span>
       <div class="w-full max-w-[28px] rounded-t-xl rounded-b-md btn-primary" style="height:${Math.max(8, l.length / maxM * 80)}%"></div>
       <span class="text-[10px] text-slate-500">${k ? mesLabel(k).slice(0, 3) : '—'}</span>
@@ -1809,11 +1954,39 @@ function openCliModal(empresa) {
     const c2 = cobroInfo(r);
     return `<tr class="row-hover" data-ro="${esc(r.ro)}" onclick="closeCliModal(); openModal(this.dataset.ro)">
       <td class="px-3 py-2 font-medium">${esc(r.ro)}</td><td class="px-3 py-2 text-slate-600">${esc(r.cierre)}</td><td class="px-3 py-2 text-slate-600">${esc(r.ruta)}</td>
-      <td class="px-3 py-2 text-slate-600">${esc(r.servicio)}</td><td class="px-3 py-2 text-slate-600">${esc(r.eta)}</td><td class="px-3 py-2 text-right">${fmt$(r.comision)}</td>
+      <td class="px-3 py-2 text-slate-600">${esc(r.servicio)}</td><td class="px-3 py-2 text-slate-600">${esc(r.eta)}</td><td class="px-3 py-2 text-right">${fmt$(c2.com)}</td>
       <td class="px-3 py-2"><span class="text-[11px] rounded-full px-2 py-0.5 ${COBRO_BADGE[c2.estado]}">${c2.estado.toLowerCase()}</span></td></tr>`;
   }).join('') || '<tr><td colspan="7" class="px-3 py-4 text-center text-xs text-slate-400">Este cliente aún no tiene RO registrados.</td></tr>';
   document.getElementById('cliModal').classList.remove('hidden');
   document.body.classList.add('modal-open');
+}
+// ---- Seguimiento semanal del cliente ----
+function renderSeguimiento(c) {
+  const semana = isoWeek(hoy());
+  const lista = (c.seguimiento || []).slice().sort((a, b) => b.semana - a.semana);
+  const puede = canEdit() && CLIENTES.includes(c);
+  document.getElementById('cfSeguimiento').innerHTML = `
+    ${puede ? `<form class="flex flex-col sm:flex-row gap-2 mb-3" onsubmit="event.preventDefault(); addGestion()">
+      <input id="cfSemana" type="number" min="1" max="53" value="${semana}" title="Semana del año" class="sm:w-24 rounded-lg px-3 py-2 text-sm">
+      <input id="cfNota" type="text" placeholder="Gestión de la semana: llamada, correo, reunión…" class="flex-1 rounded-lg px-3 py-2 text-sm">
+      <button type="submit" class="btn-primary text-sm px-4 py-2">Agregar</button></form>` : ''}
+    <ol class="space-y-2">${lista.map(x => `<li class="flex gap-3"><span class="shrink-0 text-[11px] h-fit rounded-full px-2 py-0.5 ${x.semana === semana ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">Semana ${x.semana}</span><span class="text-sm text-slate-700">${esc(x.nota)}</span></li>`).join('')
+      || '<li class="text-xs text-slate-400">Sin gestiones registradas.</li>'}</ol>`;
+}
+async function addGestion() {
+  const c = CLIENTES.find(x => x.empresa === currentCli); if (!c) return;
+  const semana = Number(document.getElementById('cfSemana').value), nota = document.getElementById('cfNota').value.replace(/[<>]/g, '').trim();
+  if (!nota || !(semana >= 1 && semana <= 53)) return;
+  const seg = (c.seguimiento || []).filter(x => x.semana !== semana || x.nota !== nota);
+  const prev = seg.find(x => x.semana === semana);
+  if (prev) prev.nota = prev.nota + ' / ' + nota; else seg.push({ semana, nota });
+  const nuevo = { ...c, seguimiento: seg.sort((a, b) => a.semana - b.semana) };
+  try {
+    if (IS_GAS) { await api('upsertCliente', clientesToSheet([nuevo])[0], c.empresa); DATA = await loadAllData(); }
+    else { Object.assign(c, nuevo); saveClientes(); }
+    renderSeguimiento(CLIENTES.find(x => x.empresa === nuevo.empresa) || c);
+    renderClientes();
+  } catch (e) { showImportFeedback('No se guardó la gestión: ' + errMsg(e), false); }
 }
 function closeCliModal() { document.getElementById('cliModal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 function verOperacionesCliente() {
@@ -1830,7 +2003,8 @@ function openClienteForm(empresa, sugerido) {
   const c = empresa ? CLIENTES.find(x => x.empresa === empresa) : { empresa: sugerido || '' };
   document.getElementById('cliFormBody').innerHTML = CLIENT_COLUMNS.map(([k, h, req]) => `<div class="${k === 'direccion' ? 'sm:col-span-2' : ''}">
       <label class="block text-xs text-slate-500 mb-1">${h}${req ? ' <span class="text-red-600 font-semibold">*</span>' : ''}</label>
-      <input id="cf_${k}" type="${k === 'correo' ? 'email' : k === 'celular' ? 'tel' : 'text'}" ${k === 'distrito' ? 'list="dl_distrito"' : ''} value="${esc((c || {})[k] || '')}" class="w-full border rounded-lg px-3 py-2 text-sm" ${k === 'semana' ? `placeholder="Ej. ${isoWeek(hoy())}"` : ''}></div>`).join('')
+      <input id="cf_${k}" type="${k === 'correo' ? 'email' : k === 'celular' ? 'tel' : 'text'}" ${k === 'distrito' ? 'list="dl_distrito"' : k === 'estado' ? 'list="dl_estadocli"' : ''} value="${esc((c || {})[k] || '')}" class="w-full border rounded-lg px-3 py-2 text-sm" ${k === 'estado' ? 'placeholder="Vacío = activo"' : ''}></div>`).join('')
+    + '<datalist id="dl_estadocli"><option value="EN LIQUIDACION"><option value="BAJA DEFINITIVA"><option value="NO HABIDO"><option value="INACTIVO"></datalist>'
     + `<datalist id="dl_distrito">${[...new Set(CLIENTES.map(x => x.distrito).filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
   document.getElementById('cliFormTitle').textContent = empresa ? 'Editar cliente' : 'Nuevo cliente';
   document.getElementById('cliFormError').textContent = '';
@@ -1845,9 +2019,9 @@ async function submitClienteForm(ev) {
   const c = Object.fromEntries(CLIENT_COLUMNS.map(([k]) => [k, document.getElementById('cf_' + k).value.replace(/[<>]/g, '').trim()]));
   if (!c.empresa) { err.textContent = 'EMPRESA es obligatorio.'; return; }
   if (c.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.correo)) { err.textContent = 'El correo no tiene un formato válido.'; return; }
-  c.semana = c.semana.replace(/^s(emana)?\s*/i, '');
-  if (c.semana && !(/^\d{1,2}$/.test(c.semana) && Number(c.semana) >= 1 && Number(c.semana) <= 53)) { err.textContent = 'SEMANA debe ser un número de semana (1–53).'; return; }
+  c.estado = c.estado.toUpperCase();
   const orig = editingCli;
+  c.seguimiento = orig ? ((CLIENTES.find(x => x.empresa === orig) || {}).seguimiento || []) : [];
   if (CLIENTES.some(x => x.empresa !== orig && empresaKey(x.empresa) === empresaKey(c.empresa))) { err.textContent = `Ya existe el cliente ${c.empresa}.`; return; }
   const btn = document.getElementById('cliFormSave'); btn.disabled = true; btn.textContent = 'Guardando…';
   try {
@@ -1878,6 +2052,7 @@ async function handleClientesImport(input) {
 const JV = { voice: null, rate: 1, rec: null, listening: false, speaking: false };
 const JV_SNAP = 'jarvis_snapshot_v1', JV_PREF = 'jarvis_prefs_v1';
 const SRClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+const jvAbiertas = () => DATA.filter(r => r.estado === 'ABIERTA');
 const jvNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---- Formato hablado ----
@@ -1968,7 +2143,7 @@ function jvCobros() {
 }
 function jvEtas(ventana = 7) {
   const t0 = hoy();
-  const prox = DATA.map(r => ({ r, d: parseDate(r.eta), etd: parseDate(r.etd) }))
+  const prox = jvAbiertas().map(r => ({ r, d: parseDate(r.eta), etd: parseDate(r.etd) }))
     .filter(x => x.d && x.d >= t0 && Math.round((x.d - t0) / 864e5) <= ventana)
     .sort((a, b) => a.d - b.d);
   const alertas = DATA.flatMap(r => (r.alertas || []).filter(a => /eta/i.test(a)).map(a => `${jvRO(r.ro)}: ${a}`));
@@ -1981,9 +2156,9 @@ function jvEtas(ventana = 7) {
   return t.join(' ');
 }
 function jvSeguro() {
-  const sd = DATA.filter(r => !r.seguroAplica);
-  if (!sd.length) return 'Todas las operaciones tienen el seguro definido.';
-  return `${jvPlural(sd.length, 'operación tiene', 'operaciones tienen')} el seguro sin definir: ${jvLista(sd.slice(0, 4).map(r => `${jvRO(r.ro)} de ${r.consignatario}`))}. Indica si aplica o no aplica.`;
+  const sd = DATA.filter(seguroPendiente);
+  if (!sd.length) return 'No hay seguros por gestionar.';
+  return `${jvPlural(sd.length, 'operación tiene', 'operaciones tienen')} el seguro por gestionar: ${jvLista(sd.slice(0, 4).map(r => `${jvRO(r.ro)} de ${r.consignatario}`))}.`;
 }
 function jvFaltantes() {
   const ob = DATA.map(r => ({ r, f: faltantes(r) })).filter(x => x.f.obligatorios.length);
@@ -1995,7 +2170,7 @@ function jvFaltantes() {
   return t.join(' ');
 }
 function jvSnapshot() {
-  return Object.fromEntries(DATA.map(r => [r.ro, { eta: r.eta, cobro: cobroInfo(r).estado, seguro: r.seguroAplica || '' }]));
+  return Object.fromEntries(DATA.map(r => [r.ro, { eta: r.eta, cobro: cobroInfo(r).estado, seguro: seguroLabel(r) }]));
 }
 function jvNovedades() {
   let prev = null; try { prev = JSON.parse(localStorage.getItem(JV_SNAP) || 'null'); } catch (e) {}
@@ -2016,7 +2191,7 @@ function jvRoInfo(r) {
   t.push(`Zarpe el ${jvFecha(r.etd)} y arribo el ${jvFecha(r.eta)}.`);
   t.push(c.estado === 'SIN COMISIÓN' ? 'No tiene comisión registrada.' : c.estado === 'COBRADA' ? `Comisión de ${jvUsd(c.com)} cobrada.` :
     c.cobrable ? `El cliente pagó el ${jvFecha(r.fechaPagoCliente)}: comisión por cobrar ${jvUsd(c.saldo)}.` : `Comisión de ${jvUsd(c.com)}, esperando el pago del cliente.`);
-  t.push(r.seguroAplica ? `Seguro: ${r.seguroAplica.toLowerCase()}.` : 'El seguro está sin definir.');
+  t.push(seguroLabel(r) ? `Seguro: ${seguroLabel(r).toLowerCase()}.` : 'El seguro está sin definir.');
   if (f.obligatorios.length) t.push(`Faltan datos obligatorios: ${f.obligatorios.map(k => LABELS[k].toLowerCase()).join(', ')}.`);
   return t.join(' ');
 }
@@ -2031,7 +2206,7 @@ async function jvBriefing() {
   const h = new Date().getHours();
   const saludo = (h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches') + (SESSION && SESSION.nombre ? ', ' + SESSION.nombre.split(' ')[0] : '') + '.';
   const partes = [saludo, jvNovedades(), jvCobros(), jvEtas(7)];
-  if (DATA.some(r => !r.seguroAplica)) partes.push(jvSeguro());
+  if (DATA.some(seguroPendiente)) partes.push(jvSeguro());
   if (DATA.some(r => faltantes(r).obligatorios.length)) partes.push(jvFaltantes());
   try { localStorage.setItem(JV_SNAP, JSON.stringify(jvSnapshot())); } catch (e) {}
   await jvSay(partes.join(' '));
@@ -2113,7 +2288,7 @@ function jvToggle(open) {
 function jvUpdateBadge() {
   const cs = DATA.map(cobroInfo);
   const criticas = cs.filter(c => c.cobrable && c.diasDesdePago > 30).length + DATA.filter(r => faltantes(r).obligatorios.length).length;
-  const total = cs.filter(c => c.cobrable).length + DATA.filter(r => !r.seguroAplica).length
+  const total = cs.filter(c => c.cobrable).length + DATA.filter(seguroPendiente).length
     + DATA.filter(r => { const d = parseDate(r.eta); return d && d >= hoy() && (d - hoy()) / 864e5 <= 7; }).length;
   const b = document.getElementById('jvBadge');
   b.textContent = total;
@@ -2145,16 +2320,22 @@ async function serverImport(input) {
     const ob = rows.filter(r => faltantes(r).obligatorios.length).length;
     const im = rows.filter(r => faltantes(r).importantes.length).length;
     const cli = rows.clientes ? rows.clientes.length : 0;
+    const cerr = rows.filter(r => r.estado !== 'ABIERTA').length;
     const existentes = rows.filter(r => DATA.some(d => d.ro === r.ro)).length;
     if (!confirm(`Se leyeron ${rows.length} RO de "${file.name}"${cli ? ` y ${cli} clientes` : ''}.\n\n`
       + `• ${rows.length - existentes} nuevos · ${existentes} ya existen (se actualizan solo los campos con dato; no se borra nada)\n`
-      + `• ${ob} con datos obligatorios vacíos · ${im} con datos importantes vacíos\n\n¿Cargar en la base de datos?`)) { input.value = ''; return; }
+      + `• ${rows.length - cerr} abiertos · ${cerr} cerrados (histórico)\n`
+      + `• ${ob} abiertos con datos obligatorios vacíos · ${im} con datos importantes vacíos\n\n¿Cargar en la base de datos?`)) { input.value = ''; return; }
     const total = { insertados: 0, actualizados: 0, errores: [] };
     const payload = rowsToSheet(rows);
     for (let i = 0; i < payload.length; i += 300) {
       showImportFeedback(`Cargando ${Math.min(i + 300, payload.length)} de ${payload.length} RO…`, true);
       const r = await api('importRows', payload.slice(i, i + 300));
       total.insertados += r.insertados; total.actualizados += r.actualizados; total.errores.push(...r.errores);
+    }
+    if (rows.tasas && Object.keys(rows.tasas.tasas).length) {
+      await api('setConfig', 'TasasSeguro', JSON.stringify(rows.tasas));
+      if (rows.tasas.minimo) await api('setConfig', 'PrimaMinima', rows.tasas.minimo);
     }
     let cliMsg = '';
     if (cli) { const rc = await api('importClientes', clientesToSheet(rows.clientes)); cliMsg = ` Clientes: ${rc.insertados} nuevos, ${rc.actualizados} actualizados.`; }

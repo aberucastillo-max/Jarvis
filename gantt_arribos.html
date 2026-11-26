@@ -47,6 +47,7 @@
   .th-filter { width: 100%; min-width: 64px; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0;
                border-radius: 6px; padding: 3px 8px; }
   .th-filter.active { border-color: #00d26a !important; }
+  select.th-filter { max-width: 150px; text-overflow: ellipsis; }
   thead.sticky-head th { position: sticky; top: 0; z-index: 2; }
   .nav-pill { color: #8c8c8c; }
   .nav-pill.active { background: #ececec; color: #121212; }
@@ -153,38 +154,46 @@
 
 <script>
 // ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
-const STORAGE_KEY = 'crm_oportunidades_data_v3';
+const STORAGE_KEY = 'crm_oportunidades_data_v4';
 
 // Excel de alimentación: [clave interna, encabezado EXACTO en el Excel, tipo, nivel, alias aceptados al importar]
 //   nivel: 'obligatorio' = nunca vacío · 'importante' = importante pero no siempre tiene · '' = no importante
 const FEED_COLUMNS = [
-  ['broker',        'BROKER',                'text',   'importante',  ['Broker']],
-  ['comision',      'COMISION PROPIA',       'num',    'importante',  ['Comisión USD', 'Comision', 'Comisión propia']],
-  ['observacion',   'OBSERVACION',           'text',   '',            ['Observaciones', 'Observación']],
-  ['seguroAplica',  'SEGURO.',               'seguro', 'importante',  ['Seguro', 'Estado seguro']],
-  ['ro',            'RO',                    'text',   'obligatorio', []],
-  ['cierre',        'CIERRE',                'date',   'obligatorio', []],
-  ['validez',       'VALIDEZ',               'date',   '',            []],
-  ['servicio',      'SERVICIO',              'text',   'obligatorio', []],
-  ['consignatario', 'CONSIGNATARIO',         'text',   'obligatorio', []],
-  ['ref',           'REF CLIENTE/PROVEEDOR', 'text',   'obligatorio', ['Ref cliente', 'Ref']],
-  ['agente',        'AGENTE/COLOAD',         'text',   'obligatorio', []],
-  ['ruta',          'RUTA',                  'text',   'obligatorio', []],
-  ['etd',           'ETD',                   'date',   'obligatorio', []],
-  ['eta',           'ETA',                   'date',   'obligatorio', []],
-  ['cantidad',      'CANTIDAD',              'text',   '',            []],
-  ['naviera',       'NAVIERA',               'text',   '',            []],
+  ['seguroAplica',        'SEGURO',                'sino',     'importante',  []],                       // SI / NO: ¿aplica seguro?
+  ['broker',              'BROKER',                'text',     'importante',  ['Broker']],
+  ['comisionBrokerTexto', 'COMISION',              'text',     '',            ['Comisión broker']],      // texto original, p. ej. "USD 50 + IGV"
+  ['observacion',         'OBSERVACION',           'text',     '',            ['Observaciones', 'Observación']],
+  ['seguroEstado',        'SEGURO.',               'segEstado','importante',  ['Estado seguro']],         // LISTO / PENDIENTE / CANCELADO / NO APLICA
+  ['ro',                  'RO',                    'text',     'obligatorio', []],
+  ['cierre',              'CIERRE',                'date',     'obligatorio', []],
+  ['validez',             'VALIDEZ',               'date',     '',            []],
+  ['servicio',            'SERVICIO',              'text',     'obligatorio', []],
+  ['consignatario',       'CONSIGNATARIO',         'text',     'obligatorio', []],
+  ['ref',                 'REF CLIENTE/PROVEEDOR', 'text',     'obligatorio', ['Ref cliente', 'Ref']],
+  ['agente',              'AGENTE/COLOAD',         'text',     'obligatorio', []],
+  ['ruta',                'RUTA',                  'text',     'obligatorio', []],
+  ['etd',                 'ETD',                   'date',     'obligatorio', []],
+  ['eta',                 'ETA',                   'date',     'obligatorio', []],
+  ['cantidad',            'CANTIDAD',              'text',     '',            []],
+  ['naviera',             'NAVIERA',               'text',     '',            []],
+  ['profit',              'PROFIT',                'num',      '',            []],
+  ['comision',            'COMISION PROPIA',       'num',      'importante',  ['VANESSA', 'Comisión propia USD']],  // PROFIT × %
+  ['comisionPct',         '% COMISION',            'pct',      '',            ['Columna1', 'Porcentaje comisión']],
 ];
 // Columnas de gestión que agrega el CRM a la derecha (opcionales en el Excel de alimentación)
 const CRM_COLUMNS = [
-  ['estado',           'Estado',               'estado',    '', []],
-  ['prioridad',        'Prioridad',            'prioridad', '', []],
-  ['seguroPrima',      'Seguro prima USD',     'num',       '', []],
-  // Cobro de la comisión propia: se cobra DESPUÉS de que el cliente paga el servicio
-  ['fechaPagoCliente', 'Pago cliente',         'date',      '', ['Fecha pago cliente']],
-  ['cobrado',          'Comisión cobrada USD', 'num',       '', ['Cobrado USD', 'Cobrado']],
-  ['fechaCobro',       'Fecha cobro comisión', 'date',      '', ['Fecha cobro']],
-  ['alertas',          'Alertas',              'alertas',   '', []],
+  ['estado',            'Estado',                       'estado',    '', []],
+  ['prioridad',         'Prioridad',                    'prioridad', '', []],
+  ['seguroPrima',       'Seguro prima USD',             'num',       '', []],
+  ['comisionBroker',    'COMISION BROKER USD',          'num',       '', []],
+  ['comisionBrokerIgv', 'COMISION BROKER IGV',          'sino',      '', []],
+  // Las comisiones se cobran DESPUÉS de que el cliente paga el servicio
+  ['fechaPagoCliente',  'Pago cliente',                 'date',      '', ['Fecha pago cliente']],
+  ['cobrado',           'Comisión cobrada USD',         'num',       '', ['Cobrado USD', 'Cobrado']],
+  ['fechaCobro',        'Fecha cobro comisión',         'date',      '', ['Fecha cobro']],
+  ['cobradoBroker',     'Comisión broker cobrada USD',  'num',       '', []],
+  ['fechaCobroBroker',  'Fecha cobro broker',           'date',      '', []],
+  ['alertas',           'Alertas',                      'alertas',   '', []],
 ];
 const EXCEL_COLUMNS = [...FEED_COLUMNS, ...CRM_COLUMNS];
 const LABELS = Object.fromEntries(EXCEL_COLUMNS.map(c => [c[0], c[1]]));
@@ -193,33 +202,33 @@ const IMPORTANT_KEYS = FEED_COLUMNS.filter(c => c[3] === 'importante').map(c => 
 
 // Datos de ejemplo (referidos a fines de nov-2026)
 const SAMPLE_DATA = [
-  { broker:'ABC Brokers', comision:600, observacion:'', seguroAplica:'APLICA', ro:'2026-099', cierre:'25/08/2026', validez:'05/09/2026', servicio:'FCL', consignatario:'Importadora Lima', ref:'IL-4410', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'20/08/2026', eta:'25/09/2026', cantidad:'1x40HC', naviera:'COSCO',
+  { broker:'ABC Brokers', comision:600, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-099', cierre:'25/08/2026', validez:'05/09/2026', servicio:'FCL', consignatario:'Importadora Lima', ref:'IL-4410', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'20/08/2026', eta:'25/09/2026', cantidad:'1x40HC', naviera:'COSCO',
     estado:'CERRADA', prioridad:false, seguroPrima:150, fechaPagoCliente:'30/09/2026', cobrado:300, fechaCobro:'15/10/2026', alertas:[] },
-  { broker:'XYZ Corp', comision:780, observacion:'Cliente pagó, falta cobrar', seguroAplica:'APLICA', ro:'2026-100', cierre:'20/08/2026', validez:'31/08/2026', servicio:'FCL', consignatario:'Electro Andes', ref:'EA-2210', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'28/08/2026', eta:'01/10/2026', cantidad:'2x40HC', naviera:'ONE',
+  { broker:'XYZ Corp', comision:780, observacion:'Cliente pagó, falta cobrar', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-100', cierre:'20/08/2026', validez:'31/08/2026', servicio:'FCL', consignatario:'Electro Andes', ref:'EA-2210', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'28/08/2026', eta:'01/10/2026', cantidad:'2x40HC', naviera:'ONE',
     estado:'CERRADA', prioridad:true, seguroPrima:240, fechaPagoCliente:'03/10/2026', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'ABC Brokers', comision:850, observacion:'Cliente frecuente', seguroAplica:'APLICA', ro:'2026-101', cierre:'05/09/2026', validez:'20/09/2026', servicio:'FCL', consignatario:'ACME SAC', ref:'ACME-PO-7781', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'28/09/2026', eta:'02/11/2026', cantidad:'2x40HC', naviera:'Maersk',
+  { broker:'ABC Brokers', comision:850, comisionBroker:100, comisionBrokerIgv:'SI', comisionBrokerTexto:'USD 100 + IGV', observacion:'Cliente frecuente', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-101', cierre:'05/09/2026', validez:'20/09/2026', servicio:'FCL', consignatario:'ACME SAC', ref:'ACME-PO-7781', agente:'Shanghai Partner', ruta:'SHA→CAL', etd:'28/09/2026', eta:'02/11/2026', cantidad:'2x40HC', naviera:'Maersk',
     estado:'CERRADA', prioridad:false, seguroPrima:210, fechaPagoCliente:'06/11/2026', cobrado:850, fechaCobro:'15/11/2026', alertas:[] },
-  { broker:'XYZ Corp', comision:320, observacion:'', seguroAplica:'NO APLICA', ro:'2026-102', cierre:'18/09/2026', validez:'30/09/2026', servicio:'LCL', consignatario:'Global Trade Perú', ref:'GTP-088', agente:'Rotterdam Coload', ruta:'RTM→CAL', etd:'08/10/2026', eta:'14/11/2026', cantidad:'6 CBM', naviera:'MSC',
+  { broker:'XYZ Corp', comision:320, observacion:'', seguroAplica:'NO', seguroEstado:'NO APLICA', ro:'2026-102', cierre:'18/09/2026', validez:'30/09/2026', servicio:'LCL', consignatario:'Global Trade Perú', ref:'GTP-088', agente:'Rotterdam Coload', ruta:'RTM→CAL', etd:'08/10/2026', eta:'14/11/2026', cantidad:'6 CBM', naviera:'MSC',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'20/11/2026', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'', comision:0, observacion:'Broker por definir', seguroAplica:'', ro:'2026-103', cierre:'29/09/2026', validez:'15/10/2026', servicio:'FCL', consignatario:'Import del Sur', ref:'IDS-2201', agente:'Hansa Agent GmbH', ruta:'HAM→CAL', etd:'20/10/2026', eta:'28/11/2026', cantidad:'1x20GP', naviera:'Hapag',
+  { broker:'', comision:0, observacion:'Broker por definir', seguroAplica:'SI', seguroEstado:'PENDIENTE', ro:'2026-103', cierre:'29/09/2026', validez:'15/10/2026', servicio:'FCL', consignatario:'Import del Sur', ref:'IDS-2201', agente:'Hansa Agent GmbH', ruta:'HAM→CAL', etd:'20/10/2026', eta:'28/11/2026', cantidad:'1x20GP', naviera:'Hapag',
     estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +2 días'] },
-  { broker:'Global Log', comision:140, observacion:'', seguroAplica:'APLICA', ro:'2026-104', cierre:'03/10/2026', validez:'18/10/2026', servicio:'Aéreo', consignatario:'Comercial Andina', ref:'AND-014', agente:'Miami Air Agent', ruta:'MIA→LIM', etd:'24/11/2026', eta:'25/11/2026', cantidad:'320 kg', naviera:'LATAM',
+  { broker:'Global Log', comision:140, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-104', cierre:'03/10/2026', validez:'18/10/2026', servicio:'Aéreo', consignatario:'Comercial Andina', ref:'AND-014', agente:'Miami Air Agent', ruta:'MIA→LIM', etd:'24/11/2026', eta:'25/11/2026', cantidad:'320 kg', naviera:'LATAM',
     estado:'ABIERTA', prioridad:false, seguroPrima:45, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'XYZ Corp', comision:410, observacion:'', seguroAplica:'APLICA', ro:'2026-105', cierre:'14/10/2026', validez:'30/10/2026', servicio:'FCL', consignatario:'Distribuidora XYZ', ref:'DXYZ-032', agente:'BUE Coload', ruta:'BUE→CAL', etd:'20/10/2026', eta:'10/11/2026', cantidad:'1x40HC', naviera:'Hapag',
+  { broker:'XYZ Corp', comision:410, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-105', cierre:'14/10/2026', validez:'30/10/2026', servicio:'FCL', consignatario:'Distribuidora XYZ', ref:'DXYZ-032', agente:'BUE Coload', ruta:'BUE→CAL', etd:'20/10/2026', eta:'10/11/2026', cantidad:'1x40HC', naviera:'Hapag',
     estado:'ABIERTA', prioridad:true, seguroPrima:180, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'Global Log', comision:260, observacion:'Pendiente confirmar seguro', seguroAplica:'', ro:'2026-106', cierre:'22/10/2026', validez:'05/11/2026', servicio:'LCL', consignatario:'Textiles Unidos', ref:'TXT-076', agente:'', ruta:'VLC→CAL', etd:'15/11/2026', eta:'20/12/2026', cantidad:'3 CBM', naviera:'ONE',
+  { broker:'Global Log', comision:260, observacion:'Pendiente confirmar seguro', seguroAplica:'SI', seguroEstado:'PENDIENTE', ro:'2026-106', cierre:'22/10/2026', validez:'05/11/2026', servicio:'LCL', consignatario:'Textiles Unidos', ref:'TXT-076', agente:'', ruta:'VLC→CAL', etd:'15/11/2026', eta:'20/12/2026', cantidad:'3 CBM', naviera:'ONE',
     estado:'ABIERTA', prioridad:true, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:['ETA desviada +3 días'] },
-  { broker:'ABC Brokers', comision:920, observacion:'', seguroAplica:'APLICA', ro:'2026-107', cierre:'30/10/2026', validez:'15/11/2026', servicio:'FCL', consignatario:'Agroexport S.A.', ref:'AGRO-045', agente:'Qingdao Partner', ruta:'CAL→QIN', etd:'01/12/2026', eta:'05/01/2027', cantidad:'4x40RF', naviera:'Maersk',
+  { broker:'ABC Brokers', comision:920, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-107', cierre:'30/10/2026', validez:'15/11/2026', servicio:'FCL', consignatario:'Agroexport S.A.', ref:'AGRO-045', agente:'Qingdao Partner', ruta:'CAL→QIN', etd:'01/12/2026', eta:'05/01/2027', cantidad:'4x40RF', naviera:'Maersk',
     estado:'ABIERTA', prioridad:false, seguroPrima:280, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'XYZ Corp', comision:1100, observacion:'Carga proyecto', seguroAplica:'APLICA', ro:'2026-108', cierre:'04/11/2026', validez:'20/11/2026', servicio:'FCL', consignatario:'Minera del Norte', ref:'MIN-051', agente:'Busan Agent', ruta:'BUS→CAL', etd:'18/11/2026', eta:'29/12/2026', cantidad:'3x40OT', naviera:'MSC',
+  { broker:'XYZ Corp', comision:1100, comisionBroker:200, comisionBrokerTexto:'USD 200', observacion:'Carga proyecto', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-108', cierre:'04/11/2026', validez:'20/11/2026', servicio:'FCL', consignatario:'Minera del Norte', ref:'MIN-051', agente:'Busan Agent', ruta:'BUS→CAL', etd:'18/11/2026', eta:'29/12/2026', cantidad:'3x40OT', naviera:'MSC',
     estado:'ABIERTA', prioridad:true, seguroPrima:390, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'', comision:0, observacion:'', seguroAplica:'NO APLICA', ro:'2026-109', cierre:'10/11/2026', validez:'28/11/2026', servicio:'Aéreo', consignatario:'Farma Lima SAC', ref:'FL-3302', agente:'Frankfurt Air', ruta:'FRA→LIM', etd:'02/12/2026', eta:'04/12/2026', cantidad:'150 kg', naviera:'Lufthansa Cargo',
+  { broker:'', comision:0, observacion:'', seguroAplica:'NO', seguroEstado:'NO APLICA', ro:'2026-109', cierre:'10/11/2026', validez:'28/11/2026', servicio:'Aéreo', consignatario:'Farma Lima SAC', ref:'FL-3302', agente:'Frankfurt Air', ruta:'FRA→LIM', etd:'02/12/2026', eta:'04/12/2026', cantidad:'150 kg', naviera:'Lufthansa Cargo',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'ABC Brokers', comision:530, observacion:'', seguroAplica:'APLICA', ro:'2026-110', cierre:'17/11/2026', validez:'27/11/2026', servicio:'FCL', consignatario:'Ferretería Central', ref:'', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'10/12/2026', eta:'15/01/2027', cantidad:'1x40HC', naviera:'COSCO',
+  { broker:'ABC Brokers', comision:530, observacion:'', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-110', cierre:'17/11/2026', validez:'27/11/2026', servicio:'FCL', consignatario:'Ferretería Central', ref:'', agente:'Ningbo Coload', ruta:'NGB→CAL', etd:'10/12/2026', eta:'15/01/2027', cantidad:'1x40HC', naviera:'COSCO',
     estado:'ABIERTA', prioridad:false, seguroPrima:150, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'Global Log', comision:300, observacion:'', seguroAplica:'', ro:'2026-111', cierre:'21/11/2026', validez:'05/12/2026', servicio:'LCL', consignatario:'Retail Perú', ref:'RP-9921', agente:'Miami Coload', ruta:'MIA→CAL', etd:'08/12/2026', eta:'18/12/2026', cantidad:'4 CBM', naviera:'CMA CGM',
+  { broker:'Global Log', comision:300, observacion:'', seguroAplica:'SI', seguroEstado:'PENDIENTE', ro:'2026-111', cierre:'21/11/2026', validez:'05/12/2026', servicio:'LCL', consignatario:'Retail Perú', ref:'RP-9921', agente:'Miami Coload', ruta:'MIA→CAL', etd:'08/12/2026', eta:'18/12/2026', cantidad:'4 CBM', naviera:'CMA CGM',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
-  { broker:'XYZ Corp', comision:0, observacion:'Comisión por negociar', seguroAplica:'APLICA', ro:'2026-112', cierre:'25/11/2026', validez:'10/12/2026', servicio:'FCL', consignatario:'Pesquera Pacífico', ref:'PP-118', agente:'Shanghai Partner', ruta:'CAL→SHA', etd:'15/12/2026', eta:'22/01/2027', cantidad:'2x40RF', naviera:'Maersk',
+  { broker:'XYZ Corp', comision:0, observacion:'Comisión por negociar', seguroAplica:'SI', seguroEstado:'LISTO', ro:'2026-112', cierre:'25/11/2026', validez:'10/12/2026', servicio:'FCL', consignatario:'Pesquera Pacífico', ref:'PP-118', agente:'Shanghai Partner', ruta:'CAL→SHA', etd:'15/12/2026', eta:'22/01/2027', cantidad:'2x40RF', naviera:'Maersk',
     estado:'ABIERTA', prioridad:false, seguroPrima:0, fechaPagoCliente:'', cobrado:0, fechaCobro:'', alertas:[] },
 ];
 
@@ -262,21 +271,41 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 function mesCierre(r) { const d = parseDate(r.cierre); return d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}` : ''; }
 function mesLabel(k) { if (!k) return 'Sin fecha de cierre'; const [y, m] = k.split('-'); return `${MESES[Number(m) - 1]} ${y}`; }
 
-// ---- Cobro de la comisión propia: se cobra cuando el cliente ya pagó el servicio ----
+// ---- Comisión del broker escrita como texto: "USD 50 + IGV", "150 EUROS A USD 175.50" ----
+function parseComisionTexto(t) {
+  const s = String(t || '');
+  const m = s.match(/USD\s*([\d.,]+)/i) || s.match(/(\d+(?:[.,]\d+)?)/);
+  const monto = m ? Number(m[1].replace(/,(?=\d{3}\b)/g, '').replace(',', '.')) || 0 : 0;
+  return { monto, igv: /\+\s*IGV/i.test(s) };
+}
+
+// ---- Seguro: SEGURO (SI/NO) + SEGURO. (estado) ----
+const SEGURO_ESTADOS = ['LISTO', 'PENDIENTE', 'CANCELADO', 'NO APLICA'];
+function seguroLabel(r) { return r.seguroEstado || (r.seguroAplica === 'NO' ? 'NO APLICA' : r.seguroAplica === 'SI' ? 'PENDIENTE' : ''); }
+function seguroPendiente(r) {   // hay que gestionarlo: aplica (o no se sabe) y no está listo, cancelado ni marcado como no aplica
+  return r.estado === 'ABIERTA' && r.seguroAplica !== 'NO' && !['LISTO', 'CANCELADO', 'NO APLICA'].includes(r.seguroEstado);
+}
+
+// ---- Cobro de comisiones (propia + broker): se cobran cuando el cliente ya pagó el servicio ----
 function cobroInfo(r) {
-  const com = Number(r.comision) || 0, cob = Number(r.cobrado) || 0;
-  const saldo = Math.max(0, Math.round((com - cob) * 100) / 100);
+  const cp = Number(r.comision) || 0, cb = Number(r.comisionBroker) || 0;
+  const cobP = Number(r.cobrado) || 0, cobB = Number(r.cobradoBroker) || 0;
+  const redondo = n => Math.round(n * 100) / 100;
+  const propia = { com: cp, cob: cobP, saldo: redondo(Math.max(0, cp - cobP)) };
+  const broker = { com: cb, cob: cobB, saldo: redondo(Math.max(0, cb - cobB)), igv: r.comisionBrokerIgv === 'SI' };
+  const com = redondo(cp + cb), cob = redondo(cobP + cobB);
+  const saldo = redondo(propia.saldo + broker.saldo);
   const pago = parseDate(r.fechaPagoCliente);
   let estado;
   if (com <= 0) estado = 'SIN COMISIÓN';
-  else if (cob >= com) estado = 'COBRADA';
+  else if (saldo <= 0) estado = 'COBRADA';
   else if (cob > 0) estado = 'PARCIAL';
   else if (pago) estado = 'LISTA PARA COBRAR';
   else estado = 'ESPERA PAGO CLIENTE';
   const diasDesdePago = pago && saldo > 0 ? Math.max(0, diasDesde(r.fechaPagoCliente)) : 0;   // urgencia del cobro
   const dEta = diasDesde(r.eta);
   const diasSinPago = !pago && com > 0 && dEta !== null && dEta > 0 ? dEta : 0;                 // carga arribó y el cliente aún no paga
-  return { com, cob, saldo, estado, pago, diasDesdePago, diasSinPago, cobrable: !!pago && saldo > 0 };
+  return { com, cob, saldo, estado, pago, diasDesdePago, diasSinPago, cobrable: !!pago && saldo > 0, propia, broker };
 }
 
 // ---- Etapa de la operación (solo ETD / ETA + cobro) ----
@@ -298,6 +327,7 @@ function etapa(r) {
 
 // ---- Calidad de datos y semáforo (calculado, no se guarda) ----
 function faltantes(r) {
+  if (r.estado && r.estado !== 'ABIERTA') return { obligatorios: [], importantes: [] };
   return {
     obligatorios: REQUIRED_KEYS.filter(k => isBlank(r[k])),
     importantes: IMPORTANT_KEYS.filter(k => k === 'comision' ? !(Number(r.comision) > 0) : isBlank(r[k])),
@@ -319,12 +349,16 @@ function esFilaDeNotas(raw) {
   return vals.filter(v => /importa|nunca|vac[ií]o|aplica\s+no\s+aplica/i.test(v)).length >= 2;
 }
 
+// Clave exacta (respeta el punto final de "SEGURO." para no confundirlo con "SEGURO")
+const exactKey = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
 function rowsFromSheet(json) {
   return json.filter(raw => !esFilaDeNotas(raw)).map(raw => {
-    const byKey = {};
-    Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const byExact = {}, byKey = {};
+    Object.keys(raw).forEach(k => { byExact[exactKey(k)] = raw[k]; if (!(normKey(k) in byKey)) byKey[normKey(k)] = raw[k]; });
     const get = (key, header, aliases) => {
-      for (const k of [header, ...aliases, key].map(normKey)) if (k in byKey) return byKey[k];
+      for (const k of [header, ...aliases].map(exactKey)) if (k in byExact) return byExact[k];
+      if (header.endsWith('.')) return '';   // "SEGURO." solo por nombre exacto
+      for (const k of [header, ...aliases, key].map(normKey)) if (k in byKey && !Object.keys(byExact).some(e => e.endsWith('.') && normKey(e) === k)) return byKey[k];
       return '';
     };
     const r = { alertas: [] };
@@ -336,12 +370,20 @@ function rowsFromSheet(json) {
         case 'date': val = normDate(v); break;
         case 'prioridad': val = /^(si|sí|alta|true|1|x)$/i.test(String(v).trim()); break;
         case 'estado': val = String(v || 'ABIERTA').trim().toUpperCase(); break;
-        case 'seguro': { const s = normKey(v); val = /^(noaplica|no|na|nocontratado)$/.test(s) ? 'NO APLICA' : /^(aplica|si|contratado)$/.test(s) ? 'APLICA' : ''; break; }
+        case 'sino': { const s = normKey(v); val = /^(si|s|aplica|true|1|x)$/.test(s) ? 'SI' : /^(no|n|noaplica|false|0)$/.test(s) ? 'NO' : ''; break; }
+        case 'segEstado': { const s = exactKey(v); val = SEGURO_ESTADOS.includes(s) ? s : s === 'APLICA' ? 'PENDIENTE' : ''; break; }
+        case 'pct': { const n = Number(String(v).replace('%', '').trim()); val = Number.isFinite(n) && String(v).trim() !== '' ? (n > 1 ? n / 100 : n) : ''; break; }
         case 'alertas': val = String(v || '').replace(/[<>]/g, '').split(/[;\n]/).map(x => x.trim()).filter(Boolean); break;
         default: val = String(v ?? '').replace(/[<>]/g, '').trim();
       }
       r[key] = val;
     });
+    // Comisión del broker: si no viene el monto, se toma del texto "USD 50 + IGV"
+    if (!(Number(r.comisionBroker) > 0) && r.comisionBrokerTexto) {
+      const c = parseComisionTexto(r.comisionBrokerTexto);
+      r.comisionBroker = c.monto;
+      if (!r.comisionBrokerIgv) r.comisionBrokerIgv = c.igv ? 'SI' : 'NO';
+    }
     return r;
   }).filter(r => r.ro);
 }
@@ -362,18 +404,28 @@ function rowsToSheet(data) {
 async function importExcelFile(file) {
   if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
   const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-  const name = wb.SheetNames.find(n => normKey(n) === 'oportunidades') || wb.SheetNames[0];
-  const rows = rowsFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true }));
+  const name = wb.SheetNames.find(n => ['oportunidades', 'bd', 'base'].includes(normKey(n))) || wb.SheetNames[0];
+  const rows = rowsFromSheet(sheetRowsWithHeader(wb.Sheets[name], ['RO', 'CIERRE']));
   if (!rows.length) throw new Error('No se encontraron filas con RO en la hoja "' + name + '".');
-  const cli = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes');
-  rows.clientes = cli ? clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[cli], { defval: '', raw: false })) : null;
+  const cli = wb.SheetNames.find(n => ['clientes', 'bdclientes', 'clientesasig'].includes(normKey(n)));
+  rows.clientes = cli ? clientesFromSheet(sheetRowsWithHeader(wb.Sheets[cli], ['EMPRESA'])) : null;
+  const tas = wb.SheetNames.find(n => normKey(n) === 'tasasseguro');
+  rows.tasas = tas ? tasasFromSheet(sheetRowsWithHeader(wb.Sheets[tas], ['EMPRESA'])) : null;
   return rows;
+}
+// Lee una hoja buscando la fila de encabezados (la primera de las 10 primeras que contiene todas las columnas clave)
+function sheetRowsWithHeader(ws, claves) {
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+  let h = aoa.findIndex((row, i) => i < 10 && claves.every(c => row.some(v => exactKey(v) === c)));
+  if (h < 0) h = 0;
+  const heads = aoa[h].map((v, i) => String(v).trim() || `__col${i}`);
+  return aoa.slice(h + 1).map(row => Object.fromEntries(heads.map((k, i) => [k, row[i] === undefined ? '' : row[i]])));
 }
 async function importClientesFile(file) {
   if (!window.XLSX) throw new Error('No se pudo cargar la librería de Excel (revisa tu conexión a internet).');
   const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-  const name = wb.SheetNames.find(n => normKey(n) === 'clientes' || normKey(n) === 'bdclientes') || wb.SheetNames[0];
-  const list = clientesFromSheet(XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false }));
+  const name = wb.SheetNames.find(n => ['clientes', 'bdclientes', 'clientesasig'].includes(normKey(n))) || wb.SheetNames[0];
+  const list = clientesFromSheet(sheetRowsWithHeader(wb.Sheets[name], ['EMPRESA']));
   if (!list.length) throw new Error('No se encontraron filas con EMPRESA en la hoja "' + name + '".');
   return list;
 }
@@ -386,7 +438,10 @@ function downloadExcel(data, filename) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Oportunidades');
   if (typeof CLIENTES !== 'undefined' && CLIENTES.length) {
-    const wc = XLSX.utils.json_to_sheet(clientesToSheet(CLIENTES), { header: CLIENT_COLUMNS.map(c => c[1]) });
+    const semanas = [...new Set(CLIENTES.flatMap(c => (c.seguimiento || []).map(x => x.semana)))].sort((a, b) => a - b);
+    const filas = CLIENTES.map(c => ({ ...Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])),
+      ...Object.fromEntries(semanas.map(n => ['SEMANA ' + n, ((c.seguimiento || []).find(x => x.semana === n) || {}).nota || ''])) }));
+    const wc = XLSX.utils.json_to_sheet(filas, { header: [...CLIENT_COLUMNS.map(c => c[1]), ...semanas.map(n => 'SEMANA ' + n)] });
     wc['!cols'] = CLIENT_COLUMNS.map(() => ({ wch: 22 }));
     XLSX.utils.book_append_sheet(wb, wc, 'Clientes');
   }
@@ -403,17 +458,19 @@ const CLIENT_COLUMNS = [
   ['correo',    'CORREO',    false, ['Email', 'E-mail', 'Mail']],
   ['direccion', 'DIRECCION', false, ['Dirección']],
   ['distrito',  'DISTRITO',  false, []],
-  ['semana',    'SEMANA',    false, []],   // también acepta encabezados como "SEMANA 35"
+  ['estado',    'ESTADO',    false, []],     // vacío = activo; p. ej. EN LIQUIDACION, BAJA DEFINITIVA
 ];
+// Seguimiento: en el Excel, una columna por semana ("SEMANA 35", "SEMANA 36"...) con la nota de la gestión
+const ESTADO_CLIENTE_RE = /(EN LIQUIDACION|BAJA DEFINITIVA|BAJA DE OFICIO|NO HABIDO|SUSPENSION|SUSPENDID|CERRAD|INACTIV)/i;
 const SAMPLE_CLIENTES = [
-  { empresa:'ACME SAC', contacto:'Carla Ríos', celular:'987654321', correo:'compras@acme.pe', direccion:'Av. Argentina 1450', distrito:'Callao', semana:'35' },
-  { empresa:'Global Trade Perú', contacto:'Jorge Paredes', celular:'991234567', correo:'jparedes@globaltrade.pe', direccion:'Jr. Huallaga 320', distrito:'Cercado de Lima', semana:'35' },
-  { empresa:'Import del Sur', contacto:'Lucía Medina', celular:'956789012', correo:'lmedina@importsur.pe', direccion:'Av. Colonial 2100', distrito:'Lima', semana:'36' },
-  { empresa:'Comercial Andina', contacto:'Pedro Salas', celular:'944556677', correo:'psalas@andina.com.pe', direccion:'Calle Los Pinos 145', distrito:'San Isidro', semana:'36' },
-  { empresa:'Agroexport S.A.', contacto:'María Torres', celular:'933221100', correo:'mtorres@agroexport.pe', direccion:'Panamericana Sur km 32', distrito:'Lurín', semana:'37' },
-  { empresa:'Minera del Norte', contacto:'Ricardo Vega', celular:'922113344', correo:'logistica@mineranorte.pe', direccion:'Av. Javier Prado Este 4200', distrito:'Surco', semana:'37' },
-  { empresa:'Farma Lima SAC', contacto:'Ana Quispe', celular:'911002233', correo:'aquispe@farmalima.pe', direccion:'Av. La Marina 980', distrito:'San Miguel', semana:'' },
-  { empresa:'Retail Perú', contacto:'', celular:'', correo:'importaciones@retailperu.pe', direccion:'Av. Benavides 1555', distrito:'Miraflores', semana:'38' },
+  { empresa:'ACME SAC', contacto:'Carla Ríos', celular:'987654321', correo:'compras@acme.pe', direccion:'Av. Argentina 1450', distrito:'Callao', estado:'', seguimiento:[{ semana:46, nota:'Cotización enviada para 2x40HC Shanghai.' }, { semana:47, nota:'Confirmó booking; pide seguro.' }] },
+  { empresa:'Global Trade Perú', contacto:'Jorge Paredes', celular:'991234567', correo:'jparedes@globaltrade.pe', direccion:'Jr. Huallaga 320', distrito:'Cercado de Lima', estado:'', seguimiento:[{ semana:47, nota:'Llamada de seguimiento: pagará la factura esta semana.' }] },
+  { empresa:'Import del Sur', contacto:'Lucía Medina', celular:'956789012', correo:'lmedina@importsur.pe', direccion:'Av. Colonial 2100', distrito:'Lima', estado:'', seguimiento:[] },
+  { empresa:'Comercial Andina', contacto:'Pedro Salas', celular:'944556677', correo:'psalas@andina.com.pe', direccion:'Calle Los Pinos 145', distrito:'San Isidro', estado:'', seguimiento:[] },
+  { empresa:'Agroexport S.A.', contacto:'María Torres', celular:'933221100', correo:'mtorres@agroexport.pe', direccion:'Panamericana Sur km 32', distrito:'Lurín', estado:'', seguimiento:[{ semana:45, nota:'Interesada en reefer a Qingdao.' }] },
+  { empresa:'Minera del Norte', contacto:'Ricardo Vega', celular:'922113344', correo:'logistica@mineranorte.pe', direccion:'Av. Javier Prado Este 4200', distrito:'Surco', estado:'', seguimiento:[] },
+  { empresa:'Farma Lima SAC', contacto:'Ana Quispe', celular:'911002233', correo:'aquispe@farmalima.pe', direccion:'Av. La Marina 980', distrito:'San Miguel', estado:'', seguimiento:[] },
+  { empresa:'Retail Perú', contacto:'', celular:'', correo:'importaciones@retailperu.pe', direccion:'Av. Benavides 1555', distrito:'Miraflores', estado:'BAJA DEFINITIVA', seguimiento:[] },
 ];
 function loadClientes() {
   try { const s = localStorage.getItem(CLIENTES_KEY); if (s) { const d = JSON.parse(s); if (Array.isArray(d)) return d; } } catch (e) {}
@@ -428,14 +485,36 @@ function clientesFromSheet(json) {
     CLIENT_COLUMNS.forEach(([key, header, , aliases]) => {
       let v = '';
       for (const k of [header, ...aliases].map(normKey)) if (k in byKey) { v = byKey[k]; break; }
-      if (key === 'semana' && v === '') { const k = Object.keys(byKey).find(k => k.startsWith('semana')); if (k) v = byKey[k]; }
-      c[key] = String(v ?? '').replace(/[<>]/g, '').trim();
+      c[key] = String(v ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
     });
+    // El estado puede venir escrito en CONTACTO ("EN LIQUIDACION", "BAJA DEFINITIVA")
+    if (!c.estado && ESTADO_CLIENTE_RE.test(c.contacto)) { c.estado = c.contacto.toUpperCase(); c.contacto = ''; }
+    // Seguimiento: columnas "SEMANA nn" o columna SEGUIMIENTO (JSON)
+    c.seguimiento = [];
+    Object.keys(raw).forEach(k => {
+      const m = String(k).match(/^\s*semana\s*(\d{1,2})\s*$/i);
+      const nota = String(raw[k] ?? '').replace(/[<>]/g, '').trim();
+      if (m && nota) c.seguimiento.push({ semana: Number(m[1]), nota });
+    });
+    const js = raw.SEGUIMIENTO || raw.seguimiento;
+    if (js) { try { const arr = typeof js === 'string' ? JSON.parse(js) : js; if (Array.isArray(arr)) c.seguimiento = arr.filter(x => x && x.nota).map(x => ({ semana: Number(x.semana) || 0, nota: String(x.nota).replace(/[<>]/g, '') })); } catch (e) {} }
+    c.seguimiento.sort((a, b) => a.semana - b.semana);
     return c;
   }).filter(c => c.empresa);
 }
 function clientesToSheet(list) {
-  return list.map(c => Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])));
+  return list.map(c => ({ ...Object.fromEntries(CLIENT_COLUMNS.map(([k, h]) => [h, c[k] ?? ''])), SEGUIMIENTO: JSON.stringify(c.seguimiento || []) }));
+}
+// Tasas de seguro por cliente (hoja "Tasas seguro": EMPRESA, PORCENTAJE; fila MINIMO opcional)
+function tasasFromSheet(json) {
+  const out = { minimo: null, tasas: {} };
+  json.forEach(raw => {
+    const byKey = {}; Object.keys(raw).forEach(k => byKey[normKey(k)] = raw[k]);
+    const emp = String(byKey.empresa || '').trim(), pct = Number(String(byKey.porcentaje ?? '').replace('%', ''));
+    if (!emp || !Number.isFinite(pct)) return;
+    if (/^m[ií]nimo/i.test(emp)) out.minimo = pct; else out.tasas[emp] = pct > 0.5 ? pct / 100 : pct;
+  });
+  return out;
 }
 const empresaKey = s => normKey(s).replace(/(sac|saa|sa|srl|eirl|sociedadanonima)$/,'');
 

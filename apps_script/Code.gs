@@ -16,15 +16,16 @@ const SHEET_USERS = 'Usuarios';
 const SHEET_CFG = 'Config';
 
 // Excel de alimentación (mismo orden y nombres que el Excel del usuario) + columnas de gestión del CRM
-const FEED_HEADERS = ['BROKER', 'COMISION PROPIA', 'OBSERVACION', 'SEGURO.', 'RO', 'CIERRE', 'VALIDEZ', 'SERVICIO',
-  'CONSIGNATARIO', 'REF CLIENTE/PROVEEDOR', 'AGENTE/COLOAD', 'RUTA', 'ETD', 'ETA', 'CANTIDAD', 'NAVIERA'];
-const CRM_HEADERS = ['Estado', 'Prioridad', 'Seguro prima USD', 'Pago cliente', 'Comisión cobrada USD', 'Fecha cobro comisión', 'Alertas'];
+const FEED_HEADERS = ['SEGURO', 'BROKER', 'COMISION', 'OBSERVACION', 'SEGURO.', 'RO', 'CIERRE', 'VALIDEZ', 'SERVICIO',
+  'CONSIGNATARIO', 'REF CLIENTE/PROVEEDOR', 'AGENTE/COLOAD', 'RUTA', 'ETD', 'ETA', 'CANTIDAD', 'NAVIERA', 'PROFIT', 'COMISION PROPIA', '% COMISION'];
+const CRM_HEADERS = ['Estado', 'Prioridad', 'Seguro prima USD', 'COMISION BROKER USD', 'COMISION BROKER IGV', 'Pago cliente',
+  'Comisión cobrada USD', 'Fecha cobro comisión', 'Comisión broker cobrada USD', 'Fecha cobro broker', 'Alertas'];
 const HEADERS = FEED_HEADERS.concat(CRM_HEADERS).concat(['Creado por', 'Actualizado por', 'Actualizado']);
-const DATE_HEADERS = ['CIERRE', 'VALIDEZ', 'ETD', 'ETA', 'Pago cliente', 'Fecha cobro comisión'];
-const NUM_HEADERS = ['COMISION PROPIA', 'Seguro prima USD', 'Comisión cobrada USD'];
+const DATE_HEADERS = ['CIERRE', 'VALIDEZ', 'ETD', 'ETA', 'Pago cliente', 'Fecha cobro comisión', 'Fecha cobro broker'];
+const NUM_HEADERS = ['PROFIT', 'COMISION PROPIA', '% COMISION', 'Seguro prima USD', 'COMISION BROKER USD', 'Comisión cobrada USD', 'Comisión broker cobrada USD'];
 const REQUIRED_HEADERS = ['RO', 'CIERRE', 'SERVICIO', 'CONSIGNATARIO', 'REF CLIENTE/PROVEEDOR', 'AGENTE/COLOAD', 'RUTA', 'ETD', 'ETA'];
 const SHEET_CLI = 'Clientes';
-const CLI_HEADERS = ['EMPRESA', 'CONTACTO', 'CELULAR', 'CORREO', 'DIRECCION', 'DISTRITO', 'SEMANA'];
+const CLI_HEADERS = ['EMPRESA', 'CONTACTO', 'CELULAR', 'CORREO', 'DIRECCION', 'DISTRITO', 'ESTADO', 'SEGUIMIENTO'];
 const USER_HEADERS = ['Usuario', 'Nombre', 'Rol', 'Activo', 'Salt', 'Hash', 'Último acceso'];
 const ROLES = ['admin', 'editor', 'lector'];
 
@@ -327,7 +328,7 @@ function getConfig_() {
 function setConfig(token, key, value) {
   const s = session_(token);
   requireEditor_(s);
-  if (['PrimaMinima'].indexOf(key) === -1) throw new Error('Parámetro no permitido.');
+  if (['PrimaMinima', 'TasasSeguro'].indexOf(key) === -1) throw new Error('Parámetro no permitido.');
   const sh = ss_().getSheetByName(SHEET_CFG) || ss_().insertSheet(SHEET_CFG);
   const last = sh.getLastRow();
   const keys = last > 0 ? sh.getRange(1, 1, last, 1).getValues().map(r => String(r[0])) : [];
