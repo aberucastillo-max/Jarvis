@@ -583,7 +583,7 @@ function applySessionUI() {
   const imp = document.getElementById('btnImport');
   const sheet = document.getElementById('lnkSheet');
   if (IS_GAS && SESSION) {
-    if (badge) badge.textContent = `Google Sheets · ${SESSION.nombre} (${SESSION.rol})`;
+    if (badge) badge.textContent = `${GAS_NATIVE ? 'Google Sheets' : 'En línea'} · ${SESSION.nombre} (${SESSION.rol})`;
     if (av) { av.textContent = SESSION.nombre.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase(); av.title = SESSION.nombre; }
     if (out) out.classList.remove('hidden');
     if (imp) imp.classList.add('hidden');

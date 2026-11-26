@@ -77,6 +77,7 @@
       </label>
       <button onclick="downloadExcel(DATA, 'control_oportunidades.xlsx')" class="hidden sm:inline-block text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">Descargar Excel</button>
       <button onclick="exportCSV()" class="hidden sm:inline-block text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">Exportar CSV</button>
+      <button id="btnUsers" type="button" onclick="openUsers()" class="hidden text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/10">Usuarios</button>
       <div id="userAvatar" class="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-sm font-semibold">ML</div>
       <button id="btnLogout" type="button" onclick="logoutNow()" class="hidden text-sm text-slate-300 hover:text-white px-2 py-1.5">Salir</button>
     </div>
@@ -501,6 +502,36 @@
     </div>
     <p id="jvSupport" class="mt-2"></p>
   </details>
+</div>
+
+<!-- MODAL USUARIOS (administrador, modo servidor) -->
+<div id="usrModal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-slate-900/70" onclick="closeUsers()"></div>
+  <div class="relative max-w-2xl mx-auto my-8 bg-card rounded-xl shadow-xl card fade-in max-h-[90vh] overflow-y-auto">
+    <div class="sticky top-0 bg-card border-b border-slate-200 px-5 py-4 flex items-center justify-between rounded-t-xl">
+      <h2 class="text-lg font-semibold">Usuarios</h2>
+      <button type="button" onclick="closeUsers()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <table class="w-full text-sm"><thead class="text-xs uppercase text-slate-500"><tr>
+        <th class="text-left py-2">Usuario</th><th class="text-left py-2">Nombre</th><th class="text-left py-2">Rol</th><th class="text-left py-2">Estado</th><th class="text-left py-2">Último acceso</th><th></th></tr></thead>
+        <tbody id="usrBody" class="divide-y divide-slate-100"></tbody></table>
+      <form id="usrForm" novalidate onsubmit="saveUser(event)" class="rounded-lg bg-slate-50 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <h3 id="usrFormTitle" class="sm:col-span-2 text-sm font-semibold text-slate-700">Nuevo usuario</h3>
+        <div><label class="block text-xs text-slate-500 mb-1">Usuario</label><input id="usrUsuario" autocomplete="off" autocapitalize="none" class="w-full rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs text-slate-500 mb-1">Nombre</label><input id="usrNombre" class="w-full rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs text-slate-500 mb-1">Rol</label>
+          <select id="usrRol" class="w-full rounded-lg px-3 py-2 text-sm"><option value="editor">Editor · registra y edita</option><option value="lector">Lector · solo ve</option><option value="admin">Administrador</option></select></div>
+        <div><label class="block text-xs text-slate-500 mb-1">Contraseña <span id="usrPwHint" class="text-slate-400">(mínimo 8)</span></label><input id="usrPassword" type="password" autocomplete="new-password" class="w-full rounded-lg px-3 py-2 text-sm"></div>
+        <label class="flex items-center gap-2 text-sm text-slate-700"><input id="usrActivo" type="checkbox" checked> Activo</label>
+        <div class="flex items-center justify-end gap-2">
+          <button type="button" onclick="resetUserForm()" class="text-sm border border-slate-200 px-4 py-2">Limpiar</button>
+          <button type="submit" class="text-sm btn-primary px-5 py-2">Guardar</button>
+        </div>
+        <p id="usrMsg" class="sm:col-span-2 text-xs text-slate-600"></p>
+      </form>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -935,7 +966,7 @@ function applySessionUI() {
   const imp = document.getElementById('btnImport');
   const sheet = document.getElementById('lnkSheet');
   if (IS_GAS && SESSION) {
-    if (badge) badge.textContent = `Google Sheets · ${SESSION.nombre} (${SESSION.rol})`;
+    if (badge) badge.textContent = `${GAS_NATIVE ? 'Google Sheets' : 'En línea'} · ${SESSION.nombre} (${SESSION.rol})`;
     if (av) { av.textContent = SESSION.nombre.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase(); av.title = SESSION.nombre; }
     if (out) out.classList.remove('hidden');
     if (imp) imp.classList.add('hidden');
@@ -1465,6 +1496,7 @@ function showImportFeedback(msg, ok) {
   el.className = 'mb-4 rounded-full px-4 py-2 text-sm ' + (ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200');
 }
 async function handleExcelImport(input) {
+  if (API_URL) return serverImport(input);   // modo servidor: carga a la base de datos
   const file = input.files && input.files[0];
   if (!file) return;
   try {
@@ -1830,9 +1862,15 @@ async function handleClientesImport(input) {
   const file = input.files && input.files[0]; if (!file) return;
   try {
     const list = await importClientesFile(file);
-    if (IS_GAS) showImportFeedback('Con Google Sheets, pega los clientes en la hoja "Clientes" de la planilla.', false);
+    if (API_URL) {
+      if (!isAdminApi()) throw new Error('Solo un administrador puede importar clientes.');
+      const r = await api('importClientes', clientesToSheet(list));
+      DATA = await loadAllData(); renderClientes();
+      showImportFeedback(`Clientes: ${r.insertados} nuevos, ${r.actualizados} actualizados (desde "${file.name}").`, true);
+    }
+    else if (IS_GAS) showImportFeedback('Con Google Sheets, pega los clientes en la hoja "Clientes" de la planilla.', false);
     else { CLIENTES = list; saveClientes(); renderClientes(); showImportFeedback(`Se importaron ${list.length} clientes desde "${file.name}".`, true); }
-  } catch (e) { showImportFeedback('No se pudo importar: ' + e.message, false); }
+  } catch (e) { showImportFeedback('No se pudo importar: ' + errMsg(e), false); }
   input.value = '';
 }
 
@@ -2095,6 +2133,97 @@ function jvUpdateBadge() {
   ].join(' ');
 })();
 
+// ============ ADMINISTRACIÓN (modo servidor: Neon / API) ============
+const isAdminApi = () => !!API_URL && !!SESSION && SESSION.rol === 'admin';
+
+// Importa el Excel histórico a la base de datos del servidor, por lotes
+async function serverImport(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    const rows = await importExcelFile(file);
+    const ob = rows.filter(r => faltantes(r).obligatorios.length).length;
+    const im = rows.filter(r => faltantes(r).importantes.length).length;
+    const cli = rows.clientes ? rows.clientes.length : 0;
+    const existentes = rows.filter(r => DATA.some(d => d.ro === r.ro)).length;
+    if (!confirm(`Se leyeron ${rows.length} RO de "${file.name}"${cli ? ` y ${cli} clientes` : ''}.\n\n`
+      + `• ${rows.length - existentes} nuevos · ${existentes} ya existen (se actualizan solo los campos con dato; no se borra nada)\n`
+      + `• ${ob} con datos obligatorios vacíos · ${im} con datos importantes vacíos\n\n¿Cargar en la base de datos?`)) { input.value = ''; return; }
+    const total = { insertados: 0, actualizados: 0, errores: [] };
+    const payload = rowsToSheet(rows);
+    for (let i = 0; i < payload.length; i += 300) {
+      showImportFeedback(`Cargando ${Math.min(i + 300, payload.length)} de ${payload.length} RO…`, true);
+      const r = await api('importRows', payload.slice(i, i + 300));
+      total.insertados += r.insertados; total.actualizados += r.actualizados; total.errores.push(...r.errores);
+    }
+    let cliMsg = '';
+    if (cli) { const rc = await api('importClientes', clientesToSheet(rows.clientes)); cliMsg = ` Clientes: ${rc.insertados} nuevos, ${rc.actualizados} actualizados.`; }
+    DATA = await loadAllData();
+    fillSelects(); applyFilters(); if (VIEW === 'clientes') renderClientes();
+    showImportFeedback(`Carga completa: ${total.insertados} RO nuevos, ${total.actualizados} actualizados.${cliMsg}`
+      + (total.errores.length ? ` ${total.errores.length} filas con error: ${total.errores.slice(0, 3).join(' · ')}` : ''), !total.errores.length);
+  } catch (e) {
+    showImportFeedback('No se pudo importar: ' + errMsg(e), false);
+  }
+  input.value = '';
+}
+
+// ---- Usuarios ----
+let usersCache = [];
+async function openUsers() {
+  document.getElementById('usrModal').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  resetUserForm();
+  await loadUsers();
+}
+function closeUsers() { document.getElementById('usrModal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
+async function loadUsers() {
+  try {
+    usersCache = await api('listUsers');
+    const rol = { admin: 'Administrador', editor: 'Editor', lector: 'Lector' };
+    document.getElementById('usrBody').innerHTML = usersCache.map(u => `
+      <tr><td class="py-2 font-medium">${esc(u.usuario)}</td><td class="py-2 text-slate-600">${esc(u.nombre)}</td><td class="py-2 text-slate-600">${rol[u.rol] || u.rol}</td>
+        <td class="py-2"><span class="text-[11px] rounded-full px-2 py-0.5 ${u.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${u.activo ? 'activo' : 'inactivo'}</span></td>
+        <td class="py-2 text-xs text-slate-500">${esc(u.ultimo || '—')}</td>
+        <td class="py-2 text-right"><button type="button" data-u="${esc(u.usuario)}" onclick="editUser(this.dataset.u)" class="text-xs border border-slate-200 px-3 py-1">Editar</button></td></tr>`).join('');
+  } catch (e) { document.getElementById('usrMsg').textContent = errMsg(e); }
+}
+function resetUserForm() {
+  ['usrUsuario', 'usrNombre', 'usrPassword'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('usrUsuario').readOnly = false;
+  document.getElementById('usrRol').value = 'editor';
+  document.getElementById('usrActivo').checked = true;
+  document.getElementById('usrFormTitle').textContent = 'Nuevo usuario';
+  document.getElementById('usrPwHint').textContent = '(mínimo 8)';
+  document.getElementById('usrMsg').textContent = '';
+}
+function editUser(usuario) {
+  const u = usersCache.find(x => x.usuario === usuario); if (!u) return;
+  document.getElementById('usrUsuario').value = u.usuario;
+  document.getElementById('usrUsuario').readOnly = true;
+  document.getElementById('usrNombre').value = u.nombre;
+  document.getElementById('usrRol').value = u.rol;
+  document.getElementById('usrActivo').checked = !!u.activo;
+  document.getElementById('usrPassword').value = '';
+  document.getElementById('usrFormTitle').textContent = `Editar ${u.usuario}`;
+  document.getElementById('usrPwHint').textContent = '(vacío = no cambia)';
+  document.getElementById('usrMsg').textContent = '';
+}
+async function saveUser(ev) {
+  ev.preventDefault();
+  const msg = document.getElementById('usrMsg');
+  const u = {
+    usuario: document.getElementById('usrUsuario').value.trim(), nombre: document.getElementById('usrNombre').value.trim(),
+    rol: document.getElementById('usrRol').value, activo: document.getElementById('usrActivo').checked, password: document.getElementById('usrPassword').value,
+  };
+  try {
+    await api('setUser', u);
+    msg.textContent = `Usuario ${u.usuario} guardado.`;
+    document.getElementById('usrPassword').value = '';
+    await loadUsers();
+  } catch (e) { msg.textContent = errMsg(e); }
+}
+
 // ============ INIT ============
 buildHeader();
 buildCliHeader();
@@ -2109,6 +2238,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal
     showImportFeedback('No se pudieron cargar los datos: ' + errMsg(e), false);
   }
   applySessionUI();
+  if (isAdminApi()) { document.getElementById('btnImport').classList.remove('hidden'); document.getElementById('btnUsers').classList.remove('hidden'); }
   loadMinPremium();
   fillSelects();
   applyFilters();
