@@ -41,6 +41,24 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+// ===================== API JSON (para el CRM publicado fuera de Google, p. ej. Render) =====================
+// El navegador envía POST con cuerpo {"fn": "...", "args": [...]}. Solo se exponen estas funciones;
+// todas, salvo login, exigen un token de sesión válido como primer argumento.
+const API_FUNCS = { login: login, logout: logout, getData: getData, createRO: createRO, updateRO: updateRO,
+                    setConfig: setConfig, upsertCliente: upsertCliente };
+function doPost(e) {
+  let out;
+  try {
+    const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const fn = API_FUNCS[req.fn];
+    if (!fn) throw new Error('Operación no permitida.');
+    out = { ok: true, result: fn.apply(null, Array.isArray(req.args) ? req.args : []) };
+  } catch (err) {
+    out = { ok: false, error: String((err && err.message) || err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
 // ===================== MENÚ EN LA HOJA =====================
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('CRM')

@@ -442,14 +442,24 @@ const empresaKey = s => normKey(s).replace(/(sac|saa|sa|srl|eirl|sociedadanonima
 // ============ CONEXIÓN CON GOOGLE SHEETS (Apps Script) + LOGIN ============
 // Dentro de Apps Script existe google.script.run: los datos vienen de la hoja y se exige usuario/contraseña.
 // Abierto como archivo local: "modo local" con datos de ejemplo/importados guardados en este navegador.
-const IS_GAS = typeof google !== 'undefined' && !!(google.script && google.script.run);
+// Publicado fuera de Google (p. ej. Render): config.js define CRM_CONFIG.apiUrl = URL /exec de Apps Script.
+const GAS_NATIVE = typeof google !== 'undefined' && !!(google.script && google.script.run);
+const CRM_CFG = (typeof window !== 'undefined' && window.CRM_CONFIG) || {};
+const API_URL = String(CRM_CFG.apiUrl || '').trim();
+const IS_GAS = GAS_NATIVE || !!API_URL;   // modo servidor: datos en Google Sheets con login
+const PAGE_FILES = { crm: CRM_CFG.crmPage || 'control_oportunidades_crm.html', gantt: CRM_CFG.ganttPage || 'gantt_arribos.html' };
 const TOKEN_KEY = 'crm_session_token';
 let SESSION = null;
 let APP = { appUrl: '', sheetUrl: '', config: {} };
 let loginWaiters = [];
 
 function gasCall(fn, ...args) {
-  return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+  if (GAS_NATIVE) return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+  // API JSON de Apps Script (doPost). text/plain evita la verificación CORS previa.
+  return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }) })
+    .then(r => { if (!r.ok) throw new Error('El servidor respondió ' + r.status); return r.json(); })
+    .then(j => { if (!j || j.ok !== true) throw new Error((j && j.error) || 'Respuesta inválida del servidor'); return j.result; },
+          e => { throw new Error(/Failed to fetch|NetworkError|Load failed/i.test(String(e && e.message)) ? 'No se pudo conectar con el servidor (revisa internet o la URL de la API).' : (e && e.message) || String(e)); });
 }
 let MEM_TOKEN = null; // respaldo si el navegador bloquea localStorage
 function getToken() { try { return localStorage.getItem(TOKEN_KEY) || MEM_TOKEN; } catch (e) { return MEM_TOKEN; } }
@@ -533,18 +543,18 @@ async function logoutNow() {
   clearToken();
   SESSION = null;
   await showLogin('Sesión cerrada. Ingresa nuevamente.');
-  if (APP.appUrl) goTo(APP.appUrl); else location.reload();
+  if (GAS_NATIVE && APP.appUrl) goTo(APP.appUrl); else { history.replaceState(null, '', location.pathname); location.reload(); }
 }
 
 function pageUrl(page, ro) {
-  if (IS_GAS) return APP.appUrl + '?page=' + page + (ro ? '&ro=' + encodeURIComponent(ro) : '');
-  return (page === 'gantt' ? 'gantt_arribos.html' : 'control_oportunidades_crm.html') + (ro ? '#ro=' + encodeURIComponent(ro) : '');
+  if (GAS_NATIVE) return APP.appUrl + '?page=' + page + (ro ? '&ro=' + encodeURIComponent(ro) : '');
+  return PAGE_FILES[page === 'gantt' ? 'gantt' : 'crm'] + (ro ? '#ro=' + encodeURIComponent(ro) : '');
 }
-function goTo(url) { if (IS_GAS) window.open(url, '_top'); else location.href = url; }
+function goTo(url) { if (GAS_NATIVE) window.open(url, '_top'); else location.href = url; }
 
 function getRequestedRO() {
   return new Promise(res => {
-    if (IS_GAS && google.script.url) google.script.url.getLocation(l => res((l.parameter || {}).ro || ''));
+    if (GAS_NATIVE && google.script.url) google.script.url.getLocation(l => res((l.parameter || {}).ro || ''));
     else res(decodeURIComponent((location.hash.match(/^#ro=(.+)$/) || [])[1] || ''));
   });
 }
