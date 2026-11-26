@@ -465,6 +465,44 @@
   </form>
 </div>
 
+<!-- JARVIS: asistente de voz -->
+<button id="jvFab" type="button" onclick="jvToggle()" title="Jarvis · asistente de voz"
+  class="fixed right-4 bottom-24 lg:bottom-6 z-40 w-14 h-14 rounded-full btn-primary shadow-xl flex items-center justify-center">
+  <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+  <span id="jvBadge" class="hidden absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center"></span>
+</button>
+
+<div id="jvPanel" class="hidden fixed right-4 bottom-40 lg:bottom-24 z-50 w-[min(400px,calc(100vw-2rem))] bg-card card rounded-xl shadow-xl fade-in flex flex-col max-h-[70vh]">
+  <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2">
+      <span id="jvDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+      <span class="font-semibold text-slate-800">Jarvis</span>
+      <span id="jvStatus" class="text-xs text-slate-500">Listo</span>
+    </div>
+    <button type="button" onclick="jvToggle(false)" class="text-slate-400 hover:text-slate-700 text-xl leading-none px-1">&times;</button>
+  </div>
+  <div class="px-4 pt-3 flex gap-2">
+    <button type="button" onclick="jvBriefing()" class="flex-1 btn-primary text-sm px-3 py-2">Novedades y alertas</button>
+    <button id="jvMic" type="button" onclick="jvListen()" class="text-sm border border-slate-300 text-slate-800 hover:bg-slate-50 px-3 py-2 flex items-center gap-1.5">
+      <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Hablar</button>
+    <button type="button" onclick="jvStop()" title="Parar" class="text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-2">■</button>
+  </div>
+  <div id="jvLog" class="flex-1 overflow-y-auto px-4 py-3 mt-3 border-t border-slate-200 space-y-2 text-sm min-h-[120px]"></div>
+  <div class="px-4 pb-2 flex flex-wrap gap-1.5" id="jvChips"></div>
+  <form class="px-4 pb-3 flex gap-2" onsubmit="event.preventDefault(); const i=document.getElementById('jvInput'); if(i.value.trim()) jvAsk(i.value); i.value='';">
+    <input id="jvInput" type="text" autocomplete="off" placeholder="Pregúntale a Jarvis…" class="flex-1 rounded-full px-3 py-2 text-sm">
+    <button type="submit" class="text-sm bg-white/10 hover:bg-white/15 text-slate-800 px-3 py-2">Enviar</button>
+  </form>
+  <details class="px-4 pb-3 text-xs text-slate-500">
+    <summary class="cursor-pointer">Voz y velocidad</summary>
+    <div class="mt-2 grid grid-cols-[1fr_auto] gap-2 items-center">
+      <select id="jvVoice" class="rounded-lg px-2 py-1.5 text-xs"></select>
+      <input id="jvRate" type="range" min="0.8" max="1.4" step="0.05" value="1" class="w-24">
+    </div>
+    <p id="jvSupport" class="mt-2"></p>
+  </details>
+</div>
+
 <script>
 // ============ MODELO DE DATOS + EXCEL (bloque idéntico en control_oportunidades_crm.html y gantt_arribos.html) ============
 const STORAGE_KEY = 'crm_oportunidades_data_v3';
@@ -1010,6 +1048,7 @@ function applyFilters() {
   renderEtaAlerts(rows);
   renderUninsured(rows);
   renderFaltantes(rows);
+  jvUpdateBadge();
 }
 const fillSelects = refreshFilterOptions;
 
@@ -1786,6 +1825,265 @@ async function handleClientesImport(input) {
   } catch (e) { showImportFeedback('No se pudo importar: ' + e.message, false); }
   input.value = '';
 }
+
+// ============ JARVIS: ASISTENTE DE VOZ (Web Speech API del navegador, sin costo) ============
+const JV = { voice: null, rate: 1, rec: null, listening: false, speaking: false };
+const JV_SNAP = 'jarvis_snapshot_v1', JV_PREF = 'jarvis_prefs_v1';
+const SRClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+const jvNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// ---- Formato hablado ----
+const jvUsd = n => `${Math.round(Number(n) || 0)} dólares`;
+const jvRO = ro => 'RO ' + String(ro).replace(/-/g, ' ');
+function jvFecha(s) {
+  const d = parseDate(s); if (!d) return 'sin fecha';
+  return `${d.getDate()} de ${MESES[d.getMonth()].toLowerCase()}${d.getFullYear() !== hoy().getFullYear() ? ' de ' + d.getFullYear() : ''}`;
+}
+const jvPlural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+const jvLista = arr => arr.length <= 1 ? (arr[0] || '') : arr.slice(0, -1).join('; ') + ' y ' + arr[arr.length - 1];
+
+// ---- Voz (síntesis) ----
+function jvLoadVoices() {
+  if (!('speechSynthesis' in window)) return;
+  const all = speechSynthesis.getVoices().filter(v => /^es/i.test(v.lang));
+  let pref = {}; try { pref = JSON.parse(localStorage.getItem(JV_PREF) || '{}'); } catch (e) {}
+  const order = ['es-PE', 'es-US', 'es-419', 'es-MX', 'es-CO', 'es-ES'];
+  all.sort((a, b) => (order.indexOf(a.lang) + 1 || 99) - (order.indexOf(b.lang) + 1 || 99));
+  JV.voice = all.find(v => v.name === pref.voice) || all[0] || null;
+  JV.rate = Number(pref.rate) || 1;
+  const sel = document.getElementById('jvVoice');
+  sel.innerHTML = all.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${v.lang})</option>`).join('') || '<option>Voz predeterminada</option>';
+  if (JV.voice) sel.value = JV.voice.name;
+  document.getElementById('jvRate').value = JV.rate;
+}
+function jvSavePrefs() {
+  const name = document.getElementById('jvVoice').value;
+  JV.voice = speechSynthesis.getVoices().find(v => v.name === name) || JV.voice;
+  JV.rate = Number(document.getElementById('jvRate').value) || 1;
+  try { localStorage.setItem(JV_PREF, JSON.stringify({ voice: name, rate: JV.rate })); } catch (e) {}
+}
+function jvStatus(txt, mode) {
+  document.getElementById('jvStatus').textContent = txt;
+  document.getElementById('jvDot').className = 'w-2.5 h-2.5 rounded-full ' + (mode === 'listen' ? 'bg-emerald-500 animate-pulse' : mode === 'speak' ? 'bg-emerald-500' : 'bg-slate-400');
+}
+function jvBubble(text, who) {
+  const log = document.getElementById('jvLog');
+  log.insertAdjacentHTML('beforeend', who === 'user'
+    ? `<div class="flex justify-end"><div class="max-w-[85%] rounded-xl rounded-br-sm bg-slate-100 text-slate-800 px-3 py-2">${esc(text)}</div></div>`
+    : `<div class="max-w-[92%] rounded-xl rounded-bl-sm border border-slate-200 text-slate-700 px-3 py-2 leading-relaxed">${esc(text)}</div>`);
+  log.scrollTop = log.scrollHeight;
+}
+function jvSay(text) {
+  jvBubble(text, 'jarvis');
+  if (!('speechSynthesis' in window)) return Promise.resolve();
+  speechSynthesis.cancel();
+  // Chrome corta frases largas: se habla por oraciones
+  const partes = text.match(/[^.!?;]+[.!?;]?/g) || [text];
+  return new Promise(resolve => {
+    let pendientes = partes.length, terminado = false;
+    const fin = () => { if (terminado) return; terminado = true; JV.speaking = false; jvStatus('Listo'); resolve(); };
+    JV.speaking = true; jvStatus('Hablando…', 'speak');
+    partes.forEach(p => {
+      const u = new SpeechSynthesisUtterance(p.trim().replace(/→/g, ' a ').replace(/\+(\d)/g, 'más $1'));
+      u.lang = (JV.voice && JV.voice.lang) || 'es-PE';
+      if (JV.voice) u.voice = JV.voice;
+      u.rate = JV.rate;
+      u.onend = u.onerror = () => { if (--pendientes <= 0) fin(); };
+      speechSynthesis.speak(u);
+    });
+    setTimeout(fin, 1500 + text.length * 90);   // respaldo si el navegador no avisa el final
+  });
+}
+function jvStop() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (JV.rec) try { JV.rec.abort(); } catch (e) {}
+  JV.listening = false; JV.speaking = false;
+  document.getElementById('jvMic').classList.remove('btn-primary');
+  jvStatus('Listo');
+}
+
+// ---- Contenido de las respuestas ----
+function jvCobros() {
+  const all = DATA.map(r => ({ r, c: cobroInfo(r) }));
+  const lista = all.filter(x => x.c.cobrable).sort((a, b) => b.c.diasDesdePago - a.c.diasDesdePago);
+  const criticas = lista.filter(x => x.c.diasDesdePago > 30);
+  const espera = all.filter(x => x.c.diasSinPago > 0).sort((a, b) => b.c.diasSinPago - a.c.diasSinPago);
+  const t = [];
+  if (lista.length) {
+    t.push(`Tienes ${jvPlural(lista.length, 'comisión lista', 'comisiones listas')} para cobrar por ${jvUsd(sum(lista, x => x.c.saldo))}.`);
+    if (criticas.length) t.push(`Atención: ${jvPlural(criticas.length, 'lleva', 'llevan')} más de 30 días: ${jvLista(criticas.slice(0, 3).map(x => `${jvRO(x.r.ro)} de ${x.r.consignatario}, ${jvUsd(x.c.saldo)}, hace ${x.c.diasDesdePago} días`))}.`);
+    const resto = lista.filter(x => x.c.diasDesdePago <= 30).slice(0, 3);
+    if (resto.length) t.push(`${criticas.length ? 'También' : 'Son'}: ${jvLista(resto.map(x => `${jvRO(x.r.ro)} de ${x.r.consignatario}, ${jvUsd(x.c.saldo)}`))}.`);
+  } else t.push('No tienes comisiones listas para cobrar.');
+  if (espera.length) t.push(`${jvPlural(espera.length, 'carga arribó', 'cargas arribaron')} y el cliente aún no paga, con ${jvUsd(sum(espera, x => x.c.saldo))} de comisión en espera. La más antigua es ${jvRO(espera[0].r.ro)} de ${espera[0].r.consignatario}, hace ${espera[0].c.diasSinPago} días.`);
+  return t.join(' ');
+}
+function jvEtas(ventana = 7) {
+  const t0 = hoy();
+  const prox = DATA.map(r => ({ r, d: parseDate(r.eta), etd: parseDate(r.etd) }))
+    .filter(x => x.d && x.d >= t0 && Math.round((x.d - t0) / 864e5) <= ventana)
+    .sort((a, b) => a.d - b.d);
+  const alertas = DATA.flatMap(r => (r.alertas || []).filter(a => /eta/i.test(a)).map(a => `${jvRO(r.ro)}: ${a}`));
+  const t = [];
+  if (prox.length) {
+    t.push(`${jvPlural(prox.length, 'arribo', 'arribos')} en los próximos ${ventana} días:`);
+    t.push(jvLista(prox.slice(0, 5).map(x => { const dd = Math.round((x.d - t0) / 864e5); return `${jvRO(x.r.ro)} de ${x.r.consignatario} llega ${dd === 0 ? 'hoy' : dd === 1 ? 'mañana' : 'el ' + jvFecha(x.r.eta)}, ruta ${x.r.ruta}`; })) + '.');
+  } else t.push(`No hay arribos en los próximos ${ventana} días.`);
+  if (alertas.length) t.push(`Alertas de ETA: ${jvLista(alertas.slice(0, 3))}.`);
+  return t.join(' ');
+}
+function jvSeguro() {
+  const sd = DATA.filter(r => !r.seguroAplica);
+  if (!sd.length) return 'Todas las operaciones tienen el seguro definido.';
+  return `${jvPlural(sd.length, 'operación tiene', 'operaciones tienen')} el seguro sin definir: ${jvLista(sd.slice(0, 4).map(r => `${jvRO(r.ro)} de ${r.consignatario}`))}. Indica si aplica o no aplica.`;
+}
+function jvFaltantes() {
+  const ob = DATA.map(r => ({ r, f: faltantes(r) })).filter(x => x.f.obligatorios.length);
+  const im = DATA.filter(r => faltantes(r).importantes.length);
+  if (!ob.length && !im.length) return 'Los datos están completos.';
+  const t = [];
+  if (ob.length) t.push(`${jvPlural(ob.length, 'operación tiene', 'operaciones tienen')} datos obligatorios vacíos: ${jvLista(ob.slice(0, 3).map(x => `${jvRO(x.r.ro)}, falta ${x.f.obligatorios.map(k => LABELS[k].toLowerCase()).join(' y ')}`))}.`);
+  if (im.length) t.push(`${jvPlural(im.length, 'operación tiene', 'operaciones tienen')} datos importantes por completar, como broker, comisión o seguro.`);
+  return t.join(' ');
+}
+function jvSnapshot() {
+  return Object.fromEntries(DATA.map(r => [r.ro, { eta: r.eta, cobro: cobroInfo(r).estado, seguro: r.seguroAplica || '' }]));
+}
+function jvNovedades() {
+  let prev = null; try { prev = JSON.parse(localStorage.getItem(JV_SNAP) || 'null'); } catch (e) {}
+  if (!prev) return 'Es la primera revisión: desde ahora te contaré qué cambió entre una consulta y otra.';
+  const t = [], nuevos = DATA.filter(r => !prev[r.ro]);
+  if (nuevos.length) t.push(`${jvPlural(nuevos.length, 'RO nuevo', 'RO nuevos')}: ${jvLista(nuevos.slice(0, 3).map(r => `${jvRO(r.ro)} de ${r.consignatario}`))}.`);
+  const etaCambio = DATA.filter(r => prev[r.ro] && prev[r.ro].eta && r.eta && prev[r.ro].eta !== r.eta);
+  if (etaCambio.length) t.push(`Cambió la ETA de ${jvLista(etaCambio.slice(0, 3).map(r => `${jvRO(r.ro)}, ahora llega el ${jvFecha(r.eta)}`))}.`);
+  const listas = DATA.filter(r => prev[r.ro] && prev[r.ro].cobro !== 'LISTA PARA COBRAR' && cobroInfo(r).estado === 'LISTA PARA COBRAR');
+  if (listas.length) t.push(`El cliente pagó en ${jvLista(listas.slice(0, 3).map(r => jvRO(r.ro)))}: ya puedes cobrar la comisión.`);
+  const cobradas = DATA.filter(r => prev[r.ro] && prev[r.ro].cobro !== 'COBRADA' && cobroInfo(r).estado === 'COBRADA');
+  if (cobradas.length) t.push(`Se registró el cobro de ${jvLista(cobradas.slice(0, 3).map(r => jvRO(r.ro)))}.`);
+  return t.length ? 'Novedades: ' + t.join(' ') : 'Sin novedades desde la última revisión.';
+}
+function jvRoInfo(r) {
+  const c = cobroInfo(r), f = faltantes(r);
+  const t = [`${jvRO(r.ro)}: ${r.consignatario || 'sin consignatario'}, ruta ${r.ruta || 'sin ruta'}, ${r.servicio || ''}.`];
+  t.push(`Zarpe el ${jvFecha(r.etd)} y arribo el ${jvFecha(r.eta)}.`);
+  t.push(c.estado === 'SIN COMISIÓN' ? 'No tiene comisión registrada.' : c.estado === 'COBRADA' ? `Comisión de ${jvUsd(c.com)} cobrada.` :
+    c.cobrable ? `El cliente pagó el ${jvFecha(r.fechaPagoCliente)}: comisión por cobrar ${jvUsd(c.saldo)}.` : `Comisión de ${jvUsd(c.com)}, esperando el pago del cliente.`);
+  t.push(r.seguroAplica ? `Seguro: ${r.seguroAplica.toLowerCase()}.` : 'El seguro está sin definir.');
+  if (f.obligatorios.length) t.push(`Faltan datos obligatorios: ${f.obligatorios.map(k => LABELS[k].toLowerCase()).join(', ')}.`);
+  return t.join(' ');
+}
+function jvClienteInfo(nombre) {
+  const s = statsCliente(nombre);
+  if (!s.n) return `${nombre} no tiene operaciones registradas.`;
+  const rutas = [...groupBy(s.ops, r => r.ruta)].sort((a, b) => b[1].length - a[1].length).slice(0, 3).map(([k, l]) => `${k} con ${l.length}`);
+  return `${nombre}: ${jvPlural(s.n, 'operación', 'operaciones')}, comisión total ${jvUsd(s.com)}, cobrada ${jvUsd(s.cob)} y por cobrar ${jvUsd(s.saldo)}. Rutas: ${jvLista(rutas)}.${s.ultimo ? ` Último cierre el ${jvFecha(s.ultimo)}.` : ''}`;
+}
+async function jvBriefing() {
+  jvToggle(true);
+  const h = new Date().getHours();
+  const saludo = (h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches') + (SESSION && SESSION.nombre ? ', ' + SESSION.nombre.split(' ')[0] : '') + '.';
+  const partes = [saludo, jvNovedades(), jvCobros(), jvEtas(7)];
+  if (DATA.some(r => !r.seguroAplica)) partes.push(jvSeguro());
+  if (DATA.some(r => faltantes(r).obligatorios.length)) partes.push(jvFaltantes());
+  try { localStorage.setItem(JV_SNAP, JSON.stringify(jvSnapshot())); } catch (e) {}
+  await jvSay(partes.join(' '));
+}
+
+// ---- Interpretación de preguntas ----
+const JV_AYUDA = 'Puedes preguntarme: qué cobros tengo, próximos arribos, seguro sin definir, datos faltantes, un RO por su número, o el resumen de un cliente. También: abre clientes, operaciones o calendario. O pulsa Novedades y alertas para escuchar todo.';
+async function jvAsk(texto) {
+  jvBubble(texto, 'user');
+  const q = jvNorm(texto).replace(/^\s*(oye\s+)?jarvis[,\s]*/, '');
+  if (/\b(para|parar|silencio|callate|detente|stop)\b/.test(q)) return jvStop();
+  if (/(ayuda|que puedes|que sabes)/.test(q)) return jvSay(JV_AYUDA);
+  const nav = [['client', 'clientes', 'Abriendo clientes.'], ['operacion', 'operaciones', 'Abriendo operaciones.'], ['resumen', 'resumen', 'Abriendo el resumen.'], ['calendario', 'gantt', 'Abriendo el calendario de ETD y ETA.']];
+  if (/\b(abre|abrir|muestra|mostrar|ir a|ve a|llevame)\b/.test(q)) {
+    const n = nav.find(([k]) => q.includes(k));
+    if (n) { await jvSay(n[2]); return n[1] === 'gantt' ? goTo(pageUrl('gantt')) : setView(n[1]); }
+  }
+  // Un RO por su número
+  const dig = q.replace(/\D/g, '');
+  if (dig.length >= 3) {
+    const hits = DATA.filter(r => { const d = String(r.ro).replace(/\D/g, ''); return d === dig || d.endsWith(dig) || dig.endsWith(d); });
+    if (hits.length === 1) return jvSay(jvRoInfo(hits[0]));
+    if (hits.length > 1) return jvSay(`Encontré ${hits.length} RO parecidos: ${jvLista(hits.slice(0, 4).map(r => jvRO(r.ro)))}. Dime el número completo.`);
+  }
+  // Un cliente por su nombre
+  const nombres = [...new Set([...CLIENTES.map(c => c.empresa), ...DATA.map(r => r.consignatario)].filter(Boolean))];
+  const qk = normKey(q);
+  const cli = nombres.filter(n => { const k = empresaKey(n); return k.length >= 4 && (qk.includes(k) || qk.includes(normKey(n.split(/\s+/)[0])) && normKey(n.split(/\s+/)[0]).length >= 4); });
+  if (cli.length === 1) return jvSay(jvClienteInfo(cli[0]));
+  if (/(cobr|comision|plata|dinero|pago|pagar|deben)/.test(q)) return jvSay(jvCobros());
+  if (/(\beta\b|arrib|lleg|zarp|embarque|naviera|proxim)/.test(q)) { const m = q.match(/(\d+)\s*dias/); return jvSay(jvEtas(m ? Number(m[1]) : 7)); }
+  if (/segur/.test(q)) return jvSay(jvSeguro());
+  if (/(falt|incomplet|datos|vacio)/.test(q)) return jvSay(jvFaltantes());
+  if (/(novedad|resumen|todo|alerta|que hay|pendiente|como va|como estamos)/.test(q)) return jvBriefing();
+  if (cli.length > 1) return jvSay(`¿De qué cliente? Encontré: ${jvLista(cli.slice(0, 4))}.`);
+  return jvSay('No entendí la pregunta. ' + JV_AYUDA);
+}
+
+// ---- Escucha (dictado) ----
+function jvListen() {
+  jvToggle(true);
+  if (!SRClass) { jvSay('Este navegador no permite dictado por voz. Escribe tu pregunta abajo; en Chrome o Edge sí puedes hablarme.'); document.getElementById('jvInput').focus(); return; }
+  if (JV.listening) { try { JV.rec.stop(); } catch (e) {} return; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  const rec = new SRClass();
+  JV.rec = rec; rec.lang = 'es-PE'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+  let finalTxt = '';
+  const input = document.getElementById('jvInput');
+  rec.onresult = e => {
+    const t = [...e.results].map(x => x[0].transcript).join('');
+    input.value = t;
+    if (e.results[e.results.length - 1].isFinal) finalTxt = t;
+  };
+  rec.onerror = e => {
+    const msg = { 'not-allowed': 'Necesito permiso para usar el micrófono. Actívalo en el candado de la barra de direcciones.', 'service-not-allowed': 'El dictado no está disponible en esta página. Escribe tu pregunta.', 'no-speech': 'No escuché nada. Pulsa Hablar e inténtalo de nuevo.', 'network': 'El dictado necesita conexión a internet.' }[e.error];
+    if (msg) jvSay(msg);
+  };
+  rec.onend = () => {
+    JV.listening = false;
+    document.getElementById('jvMic').classList.remove('btn-primary');
+    jvStatus('Listo');
+    if (finalTxt.trim()) { input.value = ''; jvAsk(finalTxt); }
+  };
+  JV.listening = true;
+  document.getElementById('jvMic').classList.add('btn-primary');
+  jvStatus('Escuchando…', 'listen');
+  try { rec.start(); } catch (e) { JV.listening = false; jvStatus('Listo'); }
+}
+
+// ---- Panel y contador de alertas ----
+function jvToggle(open) {
+  const p = document.getElementById('jvPanel');
+  const show = open === undefined ? p.classList.contains('hidden') : open;
+  p.classList.toggle('hidden', !show);
+  if (show && !document.getElementById('jvLog').children.length) {
+    jvBubble('Hola, soy Jarvis. Pulsa "Novedades y alertas" para escuchar el resumen, o "Hablar" y pregúntame lo que necesites.', 'jarvis');
+  }
+}
+function jvUpdateBadge() {
+  const cs = DATA.map(cobroInfo);
+  const criticas = cs.filter(c => c.cobrable && c.diasDesdePago > 30).length + DATA.filter(r => faltantes(r).obligatorios.length).length;
+  const total = cs.filter(c => c.cobrable).length + DATA.filter(r => !r.seguroAplica).length
+    + DATA.filter(r => { const d = parseDate(r.eta); return d && d >= hoy() && (d - hoy()) / 864e5 <= 7; }).length;
+  const b = document.getElementById('jvBadge');
+  b.textContent = total;
+  b.className = 'absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center text-slate-900 '
+    + (criticas ? 'bg-red-500' : 'bg-slate-800') + (total ? '' : ' hidden');
+  b.title = `${total} alertas${criticas ? ' · ' + criticas + ' críticas' : ''}`;
+}
+(function jvInit() {
+  const chips = ['¿Qué cobros tengo?', 'Próximos arribos', 'Seguro sin definir', 'Datos faltantes', 'Ayuda'];
+  document.getElementById('jvChips').innerHTML = chips.map(c => `<button type="button" class="text-[11px] border border-slate-300 text-slate-600 hover:text-slate-800 px-2.5 py-1" onclick="jvAsk(this.textContent)">${c}</button>`).join('');
+  if ('speechSynthesis' in window) { jvLoadVoices(); speechSynthesis.onvoiceschanged = jvLoadVoices; }
+  document.getElementById('jvVoice').addEventListener('change', jvSavePrefs);
+  document.getElementById('jvRate').addEventListener('input', jvSavePrefs);
+  document.getElementById('jvSupport').textContent = [
+    'speechSynthesis' in window ? 'Voz: disponible.' : 'Voz: este navegador no puede hablar; verás las respuestas en texto.',
+    SRClass ? 'Dictado: disponible (necesita internet y permiso de micrófono).' : 'Dictado: no disponible en este navegador; escribe tus preguntas.',
+  ].join(' ');
+})();
 
 // ============ INIT ============
 buildHeader();
