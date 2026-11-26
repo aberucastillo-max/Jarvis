@@ -342,8 +342,8 @@
           <button type="button" onclick="clearCliFilters()" class="text-xs text-sky-700 hover:underline px-2">Limpiar filtros</button>
         </div>
       </div>
-      <div class="overflow-auto max-h-[78vh]">
-        <table class="w-full text-sm">
+      <div class="overflow-auto max-h-[82vh]">
+        <table class="w-full text-xs">
           <thead id="theadCli" class="sticky-head text-slate-500 text-xs uppercase tracking-wide"></thead>
           <tbody id="tbodyCli" class="divide-y divide-slate-100"></tbody>
         </table>
@@ -351,8 +351,9 @@
     </div>
     <div class="space-y-4 xl:sticky xl:top-4">
       <div class="bg-card rounded-xl card p-4">
-        <h3 class="text-sm font-semibold text-slate-700 mb-1">Ranking de clientes por comisión</h3>
-        <p class="text-[11px] text-slate-500 mb-3"><span class="inline-block w-2 h-2 rounded-sm bg-emerald-500"></span> cobrada · <span class="inline-block w-2 h-2 rounded-sm bg-amber-400"></span> por cobrar · click para ver la ficha</p>
+        <h3 class="text-sm font-semibold text-slate-700 mb-2">Ranking por cliente</h3>
+        <div id="rankCtrl" class="flex flex-wrap gap-2 mb-2"></div>
+        <p id="rankResumen" class="text-[11px] text-slate-500 mb-3"></p>
         <div id="chartClientes" class="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1"></div>
       </div>
       <div class="bg-card rounded-xl card p-4">
@@ -1837,28 +1838,28 @@ function statsCliente(empresa) {
 }
 const telLink = c => String(c || '').replace(/[^\d+]/g, '');
 const waLink = c => { let n = telLink(c).replace(/^\+/, ''); if (n.length === 9) n = '51' + n; return 'https://wa.me/' + n; };
-const iconBtn = (href, title, ico, ext) => `<a href="${href}" title="${title}" ${ext ? 'target="_blank" rel="noopener"' : ''} onclick="event.stopPropagation()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center">${ico}</a>`;
+const iconBtn = (href, title, ico, ext) => `<a href="${href}" title="${title}" ${ext ? 'target="_blank" rel="noopener"' : ''} onclick="event.stopPropagation()" class="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center">${ico}</a>`;
 function contactBtns(c) {
   return (c.celular ? iconBtn('tel:' + telLink(c.celular), 'Llamar', '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>') + iconBtn(waLink(c.celular), 'WhatsApp', '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.4A8 8 0 1 1 21 12z"/></svg>', true) : '')
        + (c.correo ? iconBtn('mailto:' + esc(c.correo), 'Correo', '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>') : '');
 }
 
 const CLI_COLS = [
-  { key:'empresa', label:'Empresa' }, { key:'contacto', label:'Contacto' }, { key:'celular', label:'Celular' }, { key:'correo', label:'Correo' },
-  { key:'direccion', label:'Dirección' }, { key:'distrito', label:'Distrito', select:true },
-  { key:'estado', label:'Estado', select:true, value: c => c.estado || 'ACTIVO' },
-  { key:'gestion', label:'Última gestión', value: c => ultimaGestion(c) ? `S${ultimaGestion(c).semana} ${ultimaGestion(c).nota}` : '' },
+  { key:'empresa',   label:'Empresa / contacto', value: c => [c.empresa, c.contacto, c.estado].filter(Boolean).join(' · '), w:'min-w-[180px]' },
+  { key:'medios',    label:'Celular / correo',   value: c => [c.celular, c.correo].filter(Boolean).join(' · '), w:'min-w-[170px]' },
+  { key:'ubicacion', label:'Dirección / distrito', value: c => [c.direccion, c.distrito].filter(Boolean).join(' · '), w:'min-w-[160px]' },
+  { key:'gestion',   label:'Última gestión', value: c => ultimaGestion(c) ? `S${ultimaGestion(c).semana} ${ultimaGestion(c).nota}` : '', w:"w-[160px]" },
 ];
 const CLI_FILTERS = {};
 const ultimaGestion = c => (c.seguimiento || []).slice().sort((a, b) => b.semana - a.semana)[0] || null;
 const cliVal = (col, c) => col.value ? col.value(c) : c[col.key];
 function buildCliHeader() {
   const thead = document.getElementById('theadCli');
-  thead.innerHTML = `<tr>${CLI_COLS.map(c => `<th class="px-3 pt-3 pb-1 text-left font-medium bg-slate-50 whitespace-nowrap">${c.label}</th>`).join('')}
-      <th class="px-3 pt-3 pb-1 text-right font-medium bg-slate-50">RO</th><th class="px-3 pt-3 pb-1 text-right font-medium bg-slate-50">Comisión</th>
-      <th class="px-3 pt-3 pb-1 text-right font-medium bg-slate-50">Por cobrar</th><th class="px-3 pt-3 pb-1 bg-slate-50"></th></tr>
-    <tr>${CLI_COLS.map(c => `<th class="px-3 pb-2 bg-slate-50 border-b border-slate-200">${c.select ? `<select class="th-filter" data-ckey="${c.key}"><option value="">Todos</option></select>` : `<input class="th-filter" type="search" data-ckey="${c.key}" placeholder="Filtrar…">`}</th>`).join('')}
-      <th class="bg-slate-50 border-b border-slate-200" colspan="4"></th></tr>`;
+  thead.innerHTML = `<tr>${CLI_COLS.map(c => `<th class="px-2.5 pt-2 pb-1 text-left font-medium bg-slate-50 whitespace-nowrap ${c.w}">${c.label}</th>`).join('')}
+      <th class="px-2.5 pt-2 pb-1 text-right font-medium bg-slate-50">RO</th><th class="px-2.5 pt-2 pb-1 text-right font-medium bg-slate-50 whitespace-nowrap">Comisión / x cobrar</th>
+      <th class="px-2.5 pt-2 pb-1 bg-slate-50"></th></tr>
+    <tr>${CLI_COLS.map(c => `<th class="px-2.5 pb-1.5 bg-slate-50 border-b border-slate-200">${c.select ? `<select class="th-filter" data-ckey="${c.key}"><option value="">Todos</option></select>` : `<input class="th-filter" type="search" data-ckey="${c.key}" placeholder="Filtrar…">`}</th>`).join('')}
+      <th class="bg-slate-50 border-b border-slate-200" colspan="3"></th></tr>`;
   thead.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.ckey; if (!k) return; CLI_FILTERS[k] = e.target.value; e.target.classList.toggle('active', !!e.target.value); renderClientes(); });
 }
 function clearCliFilters() { document.querySelectorAll('[data-ckey]').forEach(el => { el.value = ''; el.classList.remove('active'); }); Object.keys(CLI_FILTERS).forEach(k => CLI_FILTERS[k] = ''); renderClientes(); }
@@ -1881,33 +1882,23 @@ function renderClientes() {
   })).map(c => ({ c, s: statsCliente(c.empresa) })).sort((a, b) => b.s.com - a.s.com || a.c.empresa.localeCompare(b.c.empresa));
   document.getElementById('cliCount').textContent = `${list.length} de ${CLIENTES.length}`;
   const semana = isoWeek(hoy());
-  document.getElementById('tbodyCli').innerHTML = list.map(({ c, s }) => `
-    <tr class="row-hover" data-emp="${esc(c.empresa)}" onclick="openCliModal(this.dataset.emp)">
-      <td class="px-3 py-2 font-medium text-slate-800">${esc(c.empresa)}</td>
-      <td class="px-3 py-2 text-slate-600">${esc(c.contacto) || dash}</td>
-      <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${esc(c.celular) || dash}</td>
-      <td class="px-3 py-2 text-slate-600">${esc(c.correo) || dash}</td>
-      <td class="px-3 py-2 text-slate-600">${esc(c.direccion) || dash}</td>
-      <td class="px-3 py-2 text-slate-600">${esc(c.distrito) || dash}</td>
-      <td class="px-3 py-2">${c.estado ? `<span class="text-[11px] rounded-full px-2 py-0.5 bg-slate-100 text-slate-500 whitespace-nowrap">${esc(c.estado)}</span>` : '<span class="text-[11px] rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">ACTIVO</span>'}</td>
-      <td class="px-3 py-2 text-xs text-slate-600 max-w-[260px]">${ultimaGestion(c) ? `<span class="text-[11px] rounded-full px-2 py-0.5 mr-1 ${ultimaGestion(c).semana === semana ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">S${ultimaGestion(c).semana}</span><span class="line-clamp-2">${esc(ultimaGestion(c).nota)}</span>` : dash}</td>
-      <td class="px-3 py-2 text-right">${s.n}</td>
-      <td class="px-3 py-2 text-right font-medium">${fmt$(s.com)}</td>
-      <td class="px-3 py-2 text-right ${s.saldo ? 'text-amber-700' : 'text-slate-400'}">${fmt$(s.saldo)}</td>
-      <td class="px-3 py-2"><div class="flex items-center justify-end gap-1">${contactBtns(c)}</div></td>
-    </tr>`).join('') || '<tr><td colspan="12" class="px-4 py-4 text-center text-sm text-slate-400">No hay clientes con estos filtros.</td></tr>';
+  const dos = (l1, l2, cls = '') => `<div class="leading-tight ${cls}"><div class="truncate">${l1 || dash}</div>${l2 ? `<div class="truncate text-[11px] text-slate-500">${l2}</div>` : ''}</div>`;
+  document.getElementById('tbodyCli').innerHTML = list.map(({ c, s }) => {
+    const ug = ultimaGestion(c);
+    return `
+    <tr class="row-hover text-xs" data-emp="${esc(c.empresa)}" onclick="openCliModal(this.dataset.emp)">
+      <td class="px-2.5 py-1.5"><div class="max-w-[200px]">${dos(`<span class="font-medium text-slate-800 text-[13px]" title="${esc(c.empresa)}">${esc(c.empresa)}</span>`, (c.estado ? `<span class="text-[10px] rounded-full px-1.5 bg-slate-100 text-slate-500 mr-1">${esc(c.estado)}</span>` : '') + esc(c.contacto))}</div></td>
+      <td class="px-2.5 py-1.5 text-slate-600"><div class="max-w-[175px]">${dos(esc(c.celular), `<span title="${esc(c.correo)}">${esc(c.correo)}</span>`)}</div></td>
+      <td class="px-2.5 py-1.5 text-slate-600"><div class="max-w-[165px]">${dos(`<span title="${esc(c.direccion)}">${esc(c.direccion)}</span>`, esc(c.distrito))}</div></td>
+      <td class="px-2.5 py-1.5 max-w-[300px] text-slate-600">${ug ? `<div class="flex items-center gap-1.5 max-w-[150px]"><span class="shrink-0 text-[10px] rounded-full px-1.5 py-0.5 ${ug.semana === semana ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">S${ug.semana}</span><span class="truncate" title="${esc(ug.nota)}">${esc(ug.nota)}</span></div>` : dash}</td>
+      <td class="px-2.5 py-1.5 text-right">${s.n || dash}</td>
+      <td class="px-2.5 py-1.5 text-right whitespace-nowrap">${s.com ? `<div class="font-medium">${fmt$(s.com)}</div>${s.saldo ? `<div class="text-[11px] text-amber-700">${fmt$(s.saldo)}</div>` : ''}` : dash}</td>
+      <td class="px-2.5 py-1.5"><div class="flex items-center justify-end gap-1">${contactBtns(c)}</div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" class="px-4 py-4 text-center text-sm text-slate-400">No hay clientes con estos filtros.</td></tr>';
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  // Ranking por comisión
-  const rank = CLIENTES.map(c => ({ c, s: statsCliente(c.empresa) })).filter(x => x.s.com > 0).sort((a, b) => b.s.com - a.s.com).slice(0, 10);
-  const max = Math.max(1, ...rank.map(x => x.s.com));
-  document.getElementById('chartClientes').innerHTML = rank.map(({ c, s }) => `
-    <div class="cursor-pointer group" data-emp="${esc(c.empresa)}" onclick="openCliModal(this.dataset.emp)">
-      <div class="flex justify-between text-xs mb-1"><span class="text-slate-700 group-hover:text-sky-700">${esc(c.empresa)} <span class="text-slate-400">· ${s.n} RO · ${s.rutas} ruta(s)</span></span><span class="font-medium">${fmt$(s.com)}</span></div>
-      <div class="h-2.5 bg-slate-100 rounded-full flex overflow-hidden" style="width:${(s.com / max * 100).toFixed(0)}%">
-        <div class="bg-emerald-500" style="width:${s.com ? s.cob / s.com * 100 : 0}%"></div><div class="bg-amber-400" style="width:${s.com ? s.saldo / s.com * 100 : 0}%"></div>
-      </div>
-    </div>`).join('') || '<p class="text-xs text-slate-400">Aún no hay comisiones asociadas a clientes de la BD.</p>';
+  renderRanking();
 
   // Consignatarios con RO que no están en la BD
   const keys = new Set(CLIENTES.map(c => empresaKey(c.empresa)));
@@ -1919,6 +1910,45 @@ function renderClientes() {
       ${canEdit() ? `<button type="button" data-emp="${esc(nombre)}" onclick="openClienteForm(null, this.dataset.emp)" class="shrink-0 text-xs btn-primary px-3 py-1">Agregar</button>` : ''}
     </li>`).join('') || '<li class="text-xs text-emerald-700">Todos los consignatarios tienen ficha ✔</li>';
 }
+
+// ---- Ranking por cliente (según operaciones, por fecha de CIERRE) ----
+let RANK = { dias: 90, metrica: 'cierres' };
+try { Object.assign(RANK, JSON.parse(localStorage.getItem('crm_ranking') || '{}')); } catch (e) {}
+function setRanking(k, v) {
+  RANK[k] = v;
+  try { localStorage.setItem('crm_ranking', JSON.stringify(RANK)); } catch (e) {}
+  renderRanking();
+}
+function renderRanking() {
+  const desde = new Date(hoy().getTime() - RANK.dias * 864e5);
+  const ops = DATA.filter(r => { const d = parseDate(r.cierre); return d && d >= desde && d <= hoy() && r.consignatario; });
+  const grupos = new Map();
+  ops.forEach(r => { const k = empresaKey(r.consignatario); if (!grupos.has(k)) grupos.set(k, { nombre: r.consignatario, ops: [] }); grupos.get(k).ops.push(r); });
+  const filas = [...grupos.values()].map(g => {
+    const cs = g.ops.map(cobroInfo);
+    const cli = CLIENTES.find(c => empresaKey(c.empresa) === empresaKey(g.nombre));
+    return { nombre: cli ? cli.empresa : g.nombre, enBD: !!cli, n: g.ops.length, com: sum(cs, c => c.com), cob: sum(cs, c => c.cob), saldo: sum(cs, c => c.saldo) };
+  }).filter(f => RANK.metrica === 'cierres' ? f.n : f.com > 0)
+    .sort((a, b) => RANK.metrica === 'cierres' ? b.n - a.n || b.com - a.com : b.com - a.com).slice(0, 15);
+  const val = f => RANK.metrica === 'cierres' ? f.n : f.com;
+  const max = Math.max(1, ...filas.map(val));
+  const chip = (k, v, l) => `<button type="button" onclick="setRanking('${k}', ${typeof v === 'number' ? v : `'${v}'`})" class="text-[11px] px-2.5 py-1 ${RANK[k] === v ? 'nav-pill active' : 'nav-pill'}">${l}</button>`;
+  document.getElementById('rankCtrl').innerHTML =
+    `<div class="inline-flex gap-0.5 p-0.5 rounded-full bg-slate-100">${chip('dias', 30, '1 mes')}${chip('dias', 90, '3 meses')}${chip('dias', 365, '1 año')}</div>
+     <div class="inline-flex gap-0.5 p-0.5 rounded-full bg-slate-100">${chip('metrica', 'cierres', 'Cierres')}${chip('metrica', 'comision', 'Comisión')}</div>`;
+  document.getElementById('rankResumen').textContent = `${ops.length} cierres · ${grupos.size} clientes · comisión ${fmt$(sum(ops, r => cobroInfo(r).com))}`;
+  document.getElementById('chartClientes').innerHTML = filas.map((f, i) => `
+    <div class="cursor-pointer group" data-emp="${esc(f.nombre)}" data-bd="${f.enBD ? 1 : ''}" onclick="this.dataset.bd ? openCliModal(this.dataset.emp) : verOperacionesDe(this.dataset.emp)">
+      <div class="flex justify-between gap-2 text-xs mb-1">
+        <span class="truncate text-slate-700 group-hover:text-sky-700"><span class="text-slate-400 mr-1">${i + 1}.</span>${esc(f.nombre)}</span>
+        <span class="shrink-0 font-medium">${RANK.metrica === 'cierres' ? `${f.n} RO <span class="text-slate-400 font-normal">· ${fmt$(f.com)}</span>` : fmt$(f.com)}</span>
+      </div>
+      <div class="h-2 bg-slate-100 rounded-full overflow-hidden" style="width:${(val(f) / max * 100).toFixed(0)}%">
+        ${RANK.metrica === 'cierres' ? '<div class="h-2 bg-emerald-500 rounded-full"></div>' : `<div class="h-2 flex"><div class="bg-emerald-500" style="width:${f.com ? f.cob / f.com * 100 : 0}%"></div><div class="bg-amber-400" style="width:${f.com ? f.saldo / f.com * 100 : 0}%"></div></div>`}
+      </div>
+    </div>`).join('') || '<p class="text-xs text-slate-400">No hay cierres en este periodo.</p>';
+}
+function verOperacionesDe(nombre) { currentCli = nombre; verOperacionesCliente(); }
 
 // ---- Ficha de cliente con estadísticas ----
 let currentCli = null;
@@ -1990,7 +2020,7 @@ async function addGestion() {
 }
 function closeCliModal() { document.getElementById('cliModal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 function verOperacionesCliente() {
-  const nombre = currentCli; closeCliModal(); clearFilters();
+  const nombre = currentCli; if (!document.getElementById('cliModal').classList.contains('hidden')) closeCliModal(); clearFilters();
   const inp = document.querySelector('.th-filter[data-key="consignatario"]');
   inp.value = nombre; FILTERS.consignatario = nombre; inp.classList.add('active');
   setView('operaciones'); applyFilters();
