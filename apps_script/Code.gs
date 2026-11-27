@@ -29,7 +29,7 @@ const CLI_HEADERS = ['EMPRESA', 'CONTACTO', 'CELULAR', 'CORREO', 'DIRECCION', 'D
 const USER_HEADERS = ['Usuario', 'Nombre', 'Rol', 'Activo', 'Salt', 'Hash', 'Último acceso'];
 const ROLES = ['admin', 'editor', 'lector'];
 
-const SESSION_SECONDS = 21600;     // 6 horas (máximo de CacheService)
+const SESSION_SECONDS = 300;       // 5 minutos sin actividad
 const MAX_FAILED = 5;              // intentos fallidos antes de bloquear
 const LOCK_SECONDS = 900;          // 15 minutos de bloqueo
 const HASH_ROUNDS = 300;
@@ -45,7 +45,7 @@ function doGet(e) {
 // ===================== API JSON (para el CRM publicado fuera de Google, p. ej. Render) =====================
 // El navegador envía POST con cuerpo {"fn": "...", "args": [...]}. Solo se exponen estas funciones;
 // todas, salvo login, exigen un token de sesión válido como primer argumento.
-const API_FUNCS = { login: login, logout: logout, getData: getData, createRO: createRO, updateRO: updateRO,
+const API_FUNCS = { ping: ping, login: login, logout: logout, getData: getData, createRO: createRO, updateRO: updateRO,
                     setConfig: setConfig, upsertCliente: upsertCliente };
 function doPost(e) {
   let out;
@@ -194,6 +194,8 @@ function login(usuario, password) {
   cache.put('s_' + token, JSON.stringify(session), SESSION_SECONDS);
   return { token: token, usuario: session.usuario, nombre: session.nombre, rol: session.rol };
 }
+
+function ping(token) { session_(token); return true; }
 
 function logout(token) {
   CacheService.getScriptCache().remove('s_' + token);

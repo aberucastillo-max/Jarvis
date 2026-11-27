@@ -606,11 +606,42 @@ function showLogin(msg) {
   return new Promise(res => loginWaiters.push(res));
 }
 
+// ---- Cierre de sesión por inactividad (5 minutos) ----
+const IDLE_MS = 5 * 60 * 1000;
+let idleTimer = null, lastActivity = Date.now(), idleArmed = false;
+let lastPing = Date.now();
+function idleReset() {
+  lastActivity = Date.now();
+  // con actividad, se renueva la sesión del servidor como máximo cada 2 minutos
+  if (IS_GAS && getToken() && Date.now() - lastPing > 120000) { lastPing = Date.now(); api('ping').catch(() => {}); }
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(idleLogout, IDLE_MS);
+}
+async function idleLogout() {
+  if (!IS_GAS || !getToken()) return;
+  try { await gasCall('logout', getToken()); } catch (e) {}
+  clearToken(); SESSION = null;
+  if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch (e) {}
+  await showLogin('Sesión cerrada por 5 minutos sin actividad. Ingresa nuevamente.');
+  if (GAS_NATIVE && APP.appUrl) goTo(APP.appUrl); else location.reload();
+}
+function armIdle() {
+  if (!IS_GAS || idleArmed) return;
+  idleArmed = true;
+  ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(ev => window.addEventListener(ev, idleReset, { passive: true, capture: true }));
+  // Tablet/app bloqueada o en segundo plano: al volver se revisa el tiempo transcurrido
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - lastActivity >= IDLE_MS) idleLogout(); else if (document.visibilityState === 'visible') idleReset();
+  });
+  idleReset();
+}
+
 async function loadAllData() {
   if (!IS_GAS) { CLIENTES = loadClientes(); return loadData(); }
   if (!getToken()) await showLogin();
   const res = await api('getData');
   SESSION = res.user;
+  armIdle();
   APP = { appUrl: res.appUrl, sheetUrl: res.sheetUrl, config: res.config || {} };
   CLIENTES = clientesFromSheet(res.clientes || []);
   return rowsFromSheet(res.rows);

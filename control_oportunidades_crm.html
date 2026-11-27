@@ -1002,11 +1002,42 @@ function showLogin(msg) {
   return new Promise(res => loginWaiters.push(res));
 }
 
+// ---- Cierre de sesión por inactividad (5 minutos) ----
+const IDLE_MS = 5 * 60 * 1000;
+let idleTimer = null, lastActivity = Date.now(), idleArmed = false;
+let lastPing = Date.now();
+function idleReset() {
+  lastActivity = Date.now();
+  // con actividad, se renueva la sesión del servidor como máximo cada 2 minutos
+  if (IS_GAS && getToken() && Date.now() - lastPing > 120000) { lastPing = Date.now(); api('ping').catch(() => {}); }
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(idleLogout, IDLE_MS);
+}
+async function idleLogout() {
+  if (!IS_GAS || !getToken()) return;
+  try { await gasCall('logout', getToken()); } catch (e) {}
+  clearToken(); SESSION = null;
+  if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch (e) {}
+  await showLogin('Sesión cerrada por 5 minutos sin actividad. Ingresa nuevamente.');
+  if (GAS_NATIVE && APP.appUrl) goTo(APP.appUrl); else location.reload();
+}
+function armIdle() {
+  if (!IS_GAS || idleArmed) return;
+  idleArmed = true;
+  ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(ev => window.addEventListener(ev, idleReset, { passive: true, capture: true }));
+  // Tablet/app bloqueada o en segundo plano: al volver se revisa el tiempo transcurrido
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - lastActivity >= IDLE_MS) idleLogout(); else if (document.visibilityState === 'visible') idleReset();
+  });
+  idleReset();
+}
+
 async function loadAllData() {
   if (!IS_GAS) { CLIENTES = loadClientes(); return loadData(); }
   if (!getToken()) await showLogin();
   const res = await api('getData');
   SESSION = res.user;
+  armIdle();
   APP = { appUrl: res.appUrl, sheetUrl: res.sheetUrl, config: res.config || {} };
   CLIENTES = clientesFromSheet(res.clientes || []);
   return rowsFromSheet(res.rows);
@@ -2233,22 +2264,134 @@ function jvClienteInfo(nombre) {
 }
 async function jvBriefing() {
   jvToggle(true);
-  const h = new Date().getHours();
-  const saludo = (h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches') + (SESSION && SESSION.nombre ? ', ' + SESSION.nombre.split(' ')[0] : '') + '.';
-  const partes = [saludo, jvNovedades(), jvCobros(), jvEtas(7)];
+  const partes = [jvSaludo(), jvNovedades(), jvCobros(), jvPorPagar(), jvEtas(7), jvSemana()];
+  if (DATA.some(r => r.estado === 'ABIERTA' && (!parseDate(r.etd) || !parseDate(r.eta)))) partes.push(jvSinFechas());
+  partes.push(jvRanking('mes'));
   if (DATA.some(seguroPendiente)) partes.push(jvSeguro());
   if (DATA.some(r => faltantes(r).obligatorios.length)) partes.push(jvFaltantes());
   try { localStorage.setItem(JV_SNAP, JSON.stringify(jvSnapshot())); } catch (e) {}
+  partes.push(jvAzar(['Eso es todo por ahora. Vanessa estaría orgullosa de estos números.', 'Fin del reporte. Si necesitas algo más, aquí estoy.', 'Listo. Ahora a convertir esos pendientes en cobros.']));
   await jvSay(partes.join(' '));
 }
 
+
+// ---- Personalidad: saludo según la hora, informal y con humor (creado por Vanessa) ----
+const jvAzar = arr => arr[Math.floor(Math.random() * arr.length)];
+function jvNombre() { return SESSION && SESSION.nombre ? SESSION.nombre.split(' ')[0] : ''; }
+function jvEsCreadora() { return SESSION && /vanessa/i.test((SESSION.usuario || '') + ' ' + (SESSION.nombre || '')); }
+function jvSaludo() {
+  const h = new Date().getHours(), n = jvNombre();
+  const formal = h < 6 ? 'Buenas madrugadas' : h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const extra = h < 6 ? jvAzar(['¿Tampoco duermes? Somos dos.', 'Los barcos no duermen y, por lo visto, tú tampoco.'])
+    : h < 12 ? jvAzar(['¿Ya tomaste café? Yo funciono con electricidad, pero te entiendo.', 'Buen momento para cobrar comisiones, por cierto.'])
+    : h < 14 ? jvAzar(['Casi hora de almuerzo; antes, unos números.', 'Antes del almuerzo, cuentas claras.'])
+    : h < 19 ? jvAzar(['Seguimos en la pelea.', 'La tarde rinde si los clientes pagan.'])
+    : jvAzar(['Trabajando tarde, ¿eh? Prometo ser breve.', 'Últimos números del día y a descansar.']);
+  const informal = jvAzar([`¡Hola${n ? ', ' + n : ''}!`, `¿Qué tal${n ? ', ' + n : ''}?`, `${formal}${n ? ', ' + n : ''}.`, `¡Hey${n ? ', ' + n : ''}!`]);
+  return `${informal} ${extra}`;
+}
+const JV_CHARLA = [
+  [/(quien te (creo|hizo|programo)|tu creador|tu creadora|quien eres|como te llamas|que eres)/, () => jvEsCreadora()
+     ? 'Soy Jarvis, y tú me creaste, Vanessa. Así que si algo falla… técnicamente es herencia. Estoy aquí para que no se te escape ni un RO ni una comisión.'
+     : 'Soy Jarvis, el asistente de este CRM. Me creó Vanessa, la mente detrás de cada ETA y cada comisión. Yo solo hago los cálculos y los chistes malos.'],
+  [/^(hola|holi|hey|buenas|buenos dias|buenas tardes|buenas noches|que tal|como estas|como vas)\b/, () => jvSaludo() + ' ¿Qué revisamos? Puedo darte el ranking de clientes, lo que está por llegar o lo que falta cobrar.'],
+  [/(gracias|muchas gracias|genial|excelente|buenisimo)/, () => jvAzar(['Para eso estoy. Bueno, para eso y para recordarte que las comisiones no se cobran solas.', 'Con gusto. Si Vanessa pregunta, fui muy eficiente.', '¡De nada! Me debes un café virtual.'])],
+  [/(chiste|algo gracioso|hazme reir)/, () => jvAzar(['¿Por qué el contenedor fue al psicólogo? Porque tenía demasiada carga emocional.', '¿Sabes cuál es el colmo de un agente de carga? Que lo dejen en tránsito.', 'Un ETA es como una promesa de amor: suena seguro, pero mejor confirmarlo dos veces.'])],
+  [/(te quiero|eres el mejor|buen trabajo)/, () => 'Me vas a hacer sobrecalentar. Gracias. Ahora, ¿cobramos algo?'],
+];
+
+function jvPeriodo(q) {
+  if (/semana/.test(q)) return { dias: 7, txt: 'la última semana' };
+  if (/(trimestre|3 meses|tres meses)/.test(q)) return { dias: 90, txt: 'los últimos 3 meses' };
+  if (/(ano|anual|12 meses|doce meses)/.test(q)) return { dias: 365, txt: 'el último año' };
+  if (/mes/.test(q)) return { dias: 30, txt: 'el último mes' };
+  return { dias: 90, txt: 'los últimos 3 meses' };
+}
+function jvCierresEntre(desde, hasta) {
+  return DATA.filter(r => { const d = parseDate(r.cierre); return d && d >= desde && d < hasta && r.consignatario; });
+}
+// Ranking de clientes con comparación contra el periodo anterior
+function jvRanking(q) {
+  const { dias, txt } = jvPeriodo(q);
+  const fin = new Date(hoy().getTime() + 864e5), ini = new Date(fin.getTime() - dias * 864e5), ini0 = new Date(ini.getTime() - dias * 864e5);
+  const act = jvCierresEntre(ini, fin), prev = jvCierresEntre(ini0, ini);
+  if (!act.length) return `No hay cierres en ${txt}. ${jvAzar(['Momento perfecto para llamar a los clientes.', 'Ni un RO… los barcos se están aburriendo.'])}`;
+  const grupos = new Map();
+  act.forEach(r => { const k = empresaKey(r.consignatario); if (!grupos.has(k)) grupos.set(k, { n: r.consignatario, ops: [] }); grupos.get(k).ops.push(r); });
+  const top = [...grupos.values()].map(g => ({ ...g, c: g.ops.length, com: sum(g.ops, r => cobroInfo(r).com) })).sort((a, b) => b.c - a.c || b.com - a.com);
+  const top3 = top.slice(0, 3), share = Math.round(sum(top3, g => g.c) / act.length * 100);
+  const var_ = prev.length ? Math.round((act.length - prev.length) / prev.length * 100) : null;
+  const t = [`En ${txt} hubo ${jvPlural(act.length, 'cierre', 'cierres')} de ${jvPlural(grupos.size, 'cliente', 'clientes')}, con ${jvUsd(sum(act, r => cobroInfo(r).com))} en comisiones.`];
+  if (var_ !== null) t.push(var_ > 0 ? `Son ${var_}% más que el periodo anterior (${prev.length}). ${jvAzar(['¡Vamos bien!', 'Eso merece un aplauso.'])}` : var_ < 0 ? `Son ${-var_}% menos que el periodo anterior (${prev.length}). ${jvAzar(['Toca activar la agenda de llamadas.', 'Nada que unas buenas cotizaciones no arreglen.'])}` : 'Igual que el periodo anterior: estables.');
+  t.push(`El podio: ${jvLista(top3.map((g, i) => `${i + 1}, ${g.n} con ${jvPlural(g.c, 'RO', 'RO')} y ${jvUsd(g.com)}`))}.`);
+  t.push(`Entre los tres concentran el ${share}% de los cierres${share >= 60 ? ', ojo con depender tanto de pocos clientes' : ''}.`);
+  const mejorCom = [...top].sort((a, b) => b.com - a.com)[0];
+  if (mejorCom && mejorCom !== top[0] && mejorCom.com > 0) t.push(`En comisión, el que más dejó fue ${mejorCom.n} con ${jvUsd(mejorCom.com)}.`);
+  return t.join(' ');
+}
+// Lo cerrado esta semana y lo que no tiene ETD/ETA confirmados
+function jvSemana() {
+  const t0 = hoy(), dia = (t0.getDay() + 6) % 7, lunes = new Date(t0.getTime() - dia * 864e5);
+  const sem = DATA.filter(r => { const d = parseDate(r.cierre); return d && d >= lunes && d <= t0; });
+  const sinFechas = sem.filter(r => !parseDate(r.etd) || !parseDate(r.eta));
+  if (!sem.length) return `Esta semana todavía no hay RO cerrados. ${jvAzar(['La semana es joven.', 'Hay que ponerle ritmo.'])}`;
+  const t = [`Esta semana se cerraron ${jvPlural(sem.length, 'RO', 'RO')}: ${jvLista(sem.slice(0, 5).map(r => `${jvRO(r.ro)} de ${r.consignatario}`))}.`];
+  t.push(sinFechas.length ? `De esos, ${jvPlural(sinFechas.length, 'no tiene', 'no tienen')} ETD o ETA confirmados: ${jvLista(sinFechas.slice(0, 4).map(r => `${jvRO(r.ro)}${!parseDate(r.etd) && !parseDate(r.eta) ? ', sin ninguna de las dos' : !parseDate(r.etd) ? ', falta ETD' : ', falta ETA'}`))}. Conviene confirmarlos con la naviera.`
+    : 'Todos tienen ETD y ETA confirmados. Impecable.');
+  return t.join(' ');
+}
+function jvSinFechas() {
+  const ab = DATA.filter(r => r.estado === 'ABIERTA' && (!parseDate(r.etd) || !parseDate(r.eta)));
+  if (!ab.length) return 'Todas las operaciones abiertas tienen ETD y ETA. Los barcos saben a dónde van.';
+  return `${jvPlural(ab.length, 'operación abierta no tiene', 'operaciones abiertas no tienen')} ETD o ETA confirmados: ${jvLista(ab.slice(0, 5).map(r => `${jvRO(r.ro)} de ${r.consignatario}`))}.`;
+}
+function jvPorPagar() {
+  const esp = DATA.map(r => ({ r, c: cobroInfo(r) })).filter(x => x.c.diasSinPago > 0).sort((a, b) => b.c.diasSinPago - a.c.diasSinPago);
+  if (!esp.length) return 'Ningún cliente tiene carga arribada sin pagar. Así da gusto.';
+  const porCli = [...groupBy(esp, x => empresaKey(x.r.consignatario))].map(([, l]) => ({ n: l[0].r.consignatario, l, dias: Math.max(...l.map(x => x.c.diasSinPago)), saldo: sum(l, x => x.c.saldo) })).sort((a, b) => b.dias - a.dias);
+  return `${jvPlural(porCli.length, 'cliente tiene', 'clientes tienen')} carga arribada sin pagar el servicio (${jvPlural(esp.length, 'RO', 'RO')}), con ${jvUsd(sum(esp, x => x.c.saldo))} de comisión esperando: ${jvLista(porCli.slice(0, 4).map(g => `${g.n}, ${g.l.length > 1 ? g.l.length + ' RO' : jvRO(g.l[0].r.ro)}, hace ${g.dias} días`))}.${porCli.some(g => g.dias > 30) ? ' Hay deudas de más de un mes: toca llamar.' : ''}`;
+}
+// Estado completo de un cliente
+function jvClienteEstado(nombre) {
+  const k = empresaKey(nombre), ops = DATA.filter(r => r.consignatario && empresaKey(r.consignatario) === k);
+  const ficha = CLIENTES.find(c => empresaKey(c.empresa) === k);
+  if (!ops.length) {
+    const ug = ficha && (ficha.seguimiento || []).slice().sort((a, b) => b.semana - a.semana)[0];
+    return `${nombre} no tiene operaciones registradas${ficha && ficha.estado ? `; figura como ${ficha.estado.toLowerCase()}` : ''}.${ug ? ` Última gestión, semana ${ug.semana}: ${ug.nota}` : ' Todavía es un prospecto: buen candidato para una llamada.'}`;
+  }
+  const t0 = hoy(), cs = ops.map(r => ({ r, c: cobroInfo(r), eta: parseDate(r.eta), etd: parseDate(r.etd) }));
+  const abiertas = cs.filter(x => x.r.estado === 'ABIERTA');
+  const porLlegar = abiertas.filter(x => x.eta && x.eta >= t0).sort((a, b) => a.eta - b.eta);
+  const sinPago = cs.filter(x => x.c.diasSinPago > 0), porCobrar = cs.filter(x => x.c.cobrable);
+  const sinFechas = abiertas.filter(x => !x.etd || !x.eta);
+  const d90 = new Date(t0.getTime() - 90 * 864e5), d180 = new Date(t0.getTime() - 180 * 864e5);
+  const c90 = ops.filter(r => { const d = parseDate(r.cierre); return d && d >= d90; }).length;
+  const c180 = ops.filter(r => { const d = parseDate(r.cierre); return d && d >= d180 && d < d90; }).length;
+  const ult = ops.map(r => parseDate(r.cierre)).filter(Boolean).sort((a, b) => b - a)[0];
+  const t = [`${nombre}: ${jvPlural(ops.length, 'operación', 'operaciones')} en total, ${jvPlural(abiertas.length, 'abierta', 'abiertas')}, ${jvUsd(sum(cs, x => x.c.com))} en comisiones.`];
+  if (porLlegar.length) t.push(`Por llegar: ${jvLista(porLlegar.slice(0, 3).map(x => `${jvRO(x.r.ro)} el ${jvFecha(x.r.eta)}`))}.`);
+  if (sinPago.length) t.push(`Por pagar: ${jvPlural(sinPago.length, 'carga arribada', 'cargas arribadas')} sin pago del servicio${sinPago[0] ? `, la más antigua hace ${Math.max(...sinPago.map(x => x.c.diasSinPago))} días` : ''}.`);
+  if (porCobrar.length) t.push(`Ya pagó y falta cobrar comisión: ${jvUsd(sum(porCobrar, x => x.c.saldo))}.`);
+  if (sinFechas.length) t.push(`${jvPlural(sinFechas.length, 'RO abierto sin', 'RO abiertos sin')} ETD o ETA confirmados.`);
+  if (abiertas.some(x => seguroPendiente(x.r))) t.push('Tiene seguro por gestionar.');
+  t.push(`Ritmo: ${c90} cierres en los últimos 3 meses contra ${c180} en los 3 anteriores${c90 > c180 ? ', va en subida' : c90 < c180 ? ', viene bajando; quizá merece una llamada' : ''}.`);
+  if (ult) t.push(`Último cierre: ${jvFecha(fmtDate(ult))}.`);
+  if (!porLlegar.length && !sinPago.length && !porCobrar.length) t.push(jvAzar(['Todo en orden con este cliente.', 'Cliente tranquilo: ni deudas ni sorpresas.']));
+  return t.join(' ');
+}
+
 // ---- Interpretación de preguntas ----
-const JV_AYUDA = 'Puedes preguntarme: qué cobros tengo, próximos arribos, seguro sin definir, datos faltantes, un RO por su número, o el resumen de un cliente. También: abre clientes, operaciones o calendario. O pulsa Novedades y alertas para escuchar todo.';
+const JV_AYUDA = 'Puedes preguntarme: ranking de clientes del mes, del trimestre o del año; el estado de un cliente por su nombre; qué cobros tengo; quién no ha pagado; qué llega esta semana; qué se cerró esta semana; qué RO no tienen ETD o ETA; seguros por gestionar; datos faltantes; o un RO por su número. Y si quieres, te cuento un chiste.';
 async function jvAsk(texto) {
   jvBubble(texto, 'user');
   const q = jvNorm(texto).replace(/^\s*(oye\s+)?jarvis[,\s]*/, '');
   if (/\b(para|parar|silencio|callate|detente|stop)\b/.test(q)) return jvStop();
   if (/(ayuda|que puedes|que sabes)/.test(q)) return jvSay(JV_AYUDA);
+  for (const [re, f] of JV_CHARLA) if (re.test(q.trim())) return jvSay(f());
+  if (/(ranking|mejores clientes|top|quien (cierra|compra) mas|clientes que mas)/.test(q)) return jvSay(jvRanking(q));
+  if (/(sin (etd|eta|fecha)|no tienen? (etd|eta)|sin confirmar|confirmad)/.test(q)) return jvSay(jvSinFechas());
+  if (/(esta semana|de la semana|semana actual)/.test(q) && /(cerr|creado|nuevo|ro\b|cierre)/.test(q)) return jvSay(jvSemana());
+  if (/(no (han|ha) pagado|por pagar|sin pagar|deben pagar|quien debe)/.test(q)) return jvSay(jvPorPagar());
   const nav = [['client', 'clientes', 'Abriendo clientes.'], ['operacion', 'operaciones', 'Abriendo operaciones.'], ['resumen', 'resumen', 'Abriendo el resumen.'], ['calendario', 'gantt', 'Abriendo el calendario de ETD y ETA.']];
   if (/\b(abre|abrir|muestra|mostrar|ir a|ve a|llevame)\b/.test(q)) {
     const n = nav.find(([k]) => q.includes(k));
@@ -2265,14 +2408,14 @@ async function jvAsk(texto) {
   const nombres = [...new Set([...CLIENTES.map(c => c.empresa), ...DATA.map(r => r.consignatario)].filter(Boolean))];
   const qk = normKey(q);
   const cli = nombres.filter(n => { const k = empresaKey(n); return k.length >= 4 && (qk.includes(k) || qk.includes(normKey(n.split(/\s+/)[0])) && normKey(n.split(/\s+/)[0]).length >= 4); });
-  if (cli.length === 1) return jvSay(jvClienteInfo(cli[0]));
+  if (cli.length === 1) return jvSay(jvClienteEstado(cli[0]));
   if (/(cobr|comision|plata|dinero|pago|pagar|deben)/.test(q)) return jvSay(jvCobros());
   if (/(\beta\b|arrib|lleg|zarp|embarque|naviera|proxim)/.test(q)) { const m = q.match(/(\d+)\s*dias/); return jvSay(jvEtas(m ? Number(m[1]) : 7)); }
   if (/segur/.test(q)) return jvSay(jvSeguro());
   if (/(falt|incomplet|datos|vacio)/.test(q)) return jvSay(jvFaltantes());
   if (/(novedad|resumen|todo|alerta|que hay|pendiente|como va|como estamos)/.test(q)) return jvBriefing();
   if (cli.length > 1) return jvSay(`¿De qué cliente? Encontré: ${jvLista(cli.slice(0, 4))}.`);
-  return jvSay('No entendí la pregunta. ' + JV_AYUDA);
+  return jvSay(jvAzar(['Mmm, esa no la entendí. ', 'Creo que se me cruzaron los cables. ', 'Esa se me pasó. ']) + JV_AYUDA);
 }
 
 // ---- Escucha (dictado) ----
@@ -2316,7 +2459,7 @@ function jvToggle(open) {
   const show = open === undefined ? p.classList.contains('hidden') : open;
   p.classList.toggle('hidden', !show);
   if (show && !document.getElementById('jvLog').children.length) {
-    jvBubble('Hola, soy Jarvis. Pulsa "Novedades y alertas" para escuchar el resumen, o "Hablar" y pregúntame lo que necesites.', 'jarvis');
+    jvBubble(jvSaludo() + ' Soy Jarvis, creado por Vanessa. Pulsa "Novedades y alertas" o "Hablar" y pregúntame: ranking de clientes, estado de un cliente, quién no ha pagado, qué llega esta semana…', 'jarvis');
   }
 }
 function jvUpdateBadge() {
@@ -2331,7 +2474,7 @@ function jvUpdateBadge() {
   b.title = `${total} alertas${criticas ? ' · ' + criticas + ' críticas' : ''}`;
 }
 (function jvInit() {
-  const chips = ['¿Qué cobros tengo?', 'Próximos arribos', 'Seguro sin definir', 'Datos faltantes', 'Ayuda'];
+  const chips = ['Ranking del mes', '¿Quién no ha pagado?', 'RO de esta semana', 'Sin ETD/ETA', '¿Qué cobros tengo?', 'Ayuda'];
   document.getElementById('jvChips').innerHTML = chips.map(c => `<button type="button" class="text-[11px] border border-slate-300 text-slate-600 hover:text-slate-800 px-2.5 py-1" onclick="jvAsk(this.textContent)">${c}</button>`).join('');
   if ('speechSynthesis' in window) { jvLoadVoices(); speechSynthesis.onvoiceschanged = jvLoadVoices; }
   document.getElementById('jvVoice').addEventListener('change', jvSavePrefs);
