@@ -2157,18 +2157,35 @@ function jvBubble(text, who) {
     : `<div class="max-w-[92%] rounded-xl rounded-bl-sm border border-slate-200 text-slate-700 px-3 py-2 leading-relaxed">${esc(text)}</div>`);
   log.scrollTop = log.scrollHeight;
 }
+// ---- Solo para la voz (no cambia lo que se muestra ni los datos) ----
+// Siglas que se dejan tal cual; el resto de palabras en MAYÚSCULAS se lee de corrido, no letra por letra
+const JV_SIGLAS = new Set(['RO', 'ETA', 'ETD', 'USD', 'IGV', 'FCL', 'LCL', 'SLI']);
+function jvParaVoz(t) {
+  return String(t)
+    .replace(/→/g, ' a ')
+    .replace(/\+(\d)/g, 'más $1')
+    // Números de RO en pares: RO 54345 → RO 54 34 5
+    .replace(/\bRO ((?:SIN RO )?\d[\d ]*)/g, (m, num) => 'RO ' + num.trim().replace(/\d+/g, d => d.match(/\d{1,2}/g).join(' ')) + ' ')
+    // Siglas con puntos (S.A.C., E.I.R.L., S.A.) se leen como una palabra
+    .replace(/(^|[^A-Za-zÁÉÍÓÚÑáéíóúñ])((?:[A-ZÁÉÍÓÚÑ]\.){1,4}[A-ZÁÉÍÓÚÑ]?\.?)(?=$|[^A-Za-zÁÉÍÓÚÑáéíóúñ])/g, (m, pre, sig) => pre + sig.replace(/\./g, '').toLowerCase())
+    // Palabras en MAYÚSCULAS: de corrido (ACISAC → Acisac)
+    .replace(/[A-ZÁÉÍÓÚÑ]{2,}/g, w => JV_SIGLAS.has(w) ? w : w.charAt(0) + w.slice(1).toLowerCase())
+    .replace(/\s+-\s*|\s*-\s+/g, ' ')
+    .replace(/\s{2,}/g, ' ');
+}
 function jvSay(text) {
   jvBubble(text, 'jarvis');
   if (!('speechSynthesis' in window)) return Promise.resolve();
   speechSynthesis.cancel();
   // Chrome corta frases largas: se habla por oraciones
-  const partes = text.match(/[^.!?;]+[.!?;]?/g) || [text];
+  const voz = jvParaVoz(text);   // primero se adapta (así "S.A.C." no se corta en frases sueltas)
+  const partes = voz.match(/[^.!?;]+[.!?;]?/g) || [voz];
   return new Promise(resolve => {
     let pendientes = partes.length, terminado = false;
     const fin = () => { if (terminado) return; terminado = true; JV.speaking = false; jvStatus('Listo'); resolve(); };
     JV.speaking = true; jvStatus('Hablando…', 'speak');
     partes.forEach(p => {
-      const u = new SpeechSynthesisUtterance(p.trim().replace(/→/g, ' a ').replace(/\+(\d)/g, 'más $1'));
+      const u = new SpeechSynthesisUtterance(p.trim());
       u.lang = (JV.voice && JV.voice.lang) || 'es-PE';
       if (JV.voice) u.voice = JV.voice;
       u.rate = JV.rate;
